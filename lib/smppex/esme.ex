@@ -58,21 +58,15 @@ defmodule SMPPEX.ESME do
       - `:timer_resolution` is interval of internal `ticks` on which time related events happen, like checking timeouts
       for pdus, checking SMPP timers, etc. The default is #{inspect(Defaults.timer_resolution())} ms;
       - `:enquire_link_limit` is value for enquire_link SMPP timer, i.e. the interval of SMPP session inactivity after which
-      enquire_link PDU is send to "ping" the connetion. The default value is #{
-    inspect(Defaults.enquire_link_limit())
-  } ms;
+      enquire_link PDU is send to "ping" the connetion. The default value is #{inspect(Defaults.enquire_link_limit())} ms;
       - `:enquire_link_resp_limit` is the maximum time for which ESME waits for enquire_link PDU response. If the
       response is not received within this interval of time and no activity from the peer occurs, the session is then considered
       dead and the ESME stops. The default value is #{inspect(Defaults.enquire_link_resp_limit())} ms;
       - `:inactivity_limit` is the maximum time for which the peer is allowed not to send PDUs (which are not response PDUs).
-      If no such PDUs are received within this interval of time, ESME stops. The default is #{
-    inspect(Defaults.inactivity_limit())
-  } ms;
+      If no such PDUs are received within this interval of time, ESME stops. The default is #{inspect(Defaults.inactivity_limit())} ms;
       - `:response_limit` is the maximum time to wait for a response for a previously sent PDU. If the response is
       not received within this interval, `handle_resp_timeout` callback is triggered for the original pdu. If the response
-      is received later, it is discarded. The default value is #{
-    inspect(Defaults.response_limit())
-  } ms.
+      is received later, it is discarded. The default value is #{inspect(Defaults.response_limit())} ms.
       - `:session_init_limit` is the maximum time for the session to be unbound.
       If no bind request succeed within this interval of time, the session stops.
       The default value is #{inspect(Defaults.session_init_limit())} ms;

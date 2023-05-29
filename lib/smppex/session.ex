@@ -278,9 +278,7 @@ defmodule SMPPEX.Session do
       @impl SMPPEX.Session
       def terminate(reason, lost_pdus, _state) do
         Logger.info(
-          "Session #{inspect(self())} stopped with reason: #{inspect(reason)}, lost_pdus: #{
-            inspect(lost_pdus)
-          }"
+          "Session #{inspect(self())} stopped with reason: #{inspect(reason)}, lost_pdus: #{inspect(lost_pdus)}"
         )
 
         :stop

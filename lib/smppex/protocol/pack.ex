@@ -1,7 +1,7 @@
 defmodule SMPPEX.Protocol.Pack do
   @moduledoc false
 
-  use Bitwise
+  import Bitwise
   alias SMPPEX.Protocol.Unpack.Helpers
 
   @null 0

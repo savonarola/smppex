@@ -5,10 +5,10 @@ defmodule Smppex.Mixfile do
     [
       app: :smppex,
       version: "3.0.6",
-      elixir: "~> 1.7",
+      elixir: "~> 1.11",
       build_embedded: Mix.env() == :prod,
       start_permanent: Mix.env() == :prod,
-      source_url: "https://github.com/funbox/smppex",
+      source_url: "https://github.com/savonarola/smppex",
       deps: deps(),
       description: description(),
       elixirc_paths: elixirc_paths(Mix.env()),
@@ -21,9 +21,7 @@ defmodule Smppex.Mixfile do
       ],
       package: package(),
       dialyzer: [
-        plt_add_deps: true,
-        plt_add_apps: [:ssl],
-        flags: ["-Werror_handling", "-Wrace_conditions"]
+        plt_add_apps: [:ssl]
       ],
       docs: docs()
     ]
@@ -33,27 +31,12 @@ defmodule Smppex.Mixfile do
     [applications: [:logger, :ranch]]
   end
 
-  def ex_doc_version() do
-    version = System.version()
-
-    cond do
-      version |> Version.match?(">= 1.10.0") ->
-        "~> 0.23"
-
-      version |> Version.match?(">= 1.7.0") ->
-        "~> 0.22.0"
-
-      true ->
-        "~> 0.18.0"
-    end
-  end
-
   defp deps do
     [
       {:excoveralls, "~> 0.5", only: :test},
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
       {:earmark, "~> 1.4", only: :dev},
-      {:ex_doc, ex_doc_version(), only: :dev},
+      {:ex_doc, "~> 0.23", only: :dev},
       {:credo, "~> 1.5", only: [:dev, :test], runtime: false},
       {:ranch, "~> 2.0"}
     ]
@@ -73,7 +56,7 @@ defmodule Smppex.Mixfile do
       maintainers: ["Ilya Averyanov"],
       licenses: ["MIT"],
       links: %{
-        "GitHub" => "https://github.com/funbox/smppex"
+        "GitHub" => "https://github.com/savonarola/smppex"
       }
     ]
   end
