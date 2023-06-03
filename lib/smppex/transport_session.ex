@@ -77,7 +77,7 @@ defmodule SMPPEX.TransportSession do
   end
 
   def start_link(mode, args) do
-    ProcLib.start_link(__MODULE__, :init, [{mode, args}])
+    ProcLib.start_link(__MODULE__, :init_loop, [{mode, args}])
   end
 
   # Manual start, without Ranch
@@ -109,7 +109,7 @@ defmodule SMPPEX.TransportSession do
     {:ok, pid}
   end
 
-  def init({:mc, {ref, transport, opts}}) do
+  def init_loop({:mc, {ref, transport, opts}}) do
     :ok = ProcLib.init_ack({:ok, self()})
     {:ok, socket} = Ranch.handshake(ref)
     {module, module_opts} = opts
@@ -135,7 +135,7 @@ defmodule SMPPEX.TransportSession do
     end
   end
 
-  def init({:esme, {socket, ref, transport, opts}}) do
+  def init_loop({:esme, {socket, ref, transport, opts}}) do
     {module, module_opts} = opts
 
     case module.init(socket, transport, module_opts) do
@@ -336,5 +336,10 @@ defmodule SMPPEX.TransportSession do
       {:error, _} = err ->
         err
     end
+  end
+
+  # Not used actually, GenServer is started with :proc_lib.start_link/3
+  def init(init_arg) do
+    {:ok, init_arg}
   end
 end

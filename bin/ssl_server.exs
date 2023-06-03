@@ -1,7 +1,7 @@
 :ssl.start()
 
 socket_opts = [
-  certfile: 'test/support/ssl/localhost.crt',
+  certfile: 'test/support/ssl/good.rubybox.dev.crt',
   keyfile: 'test/support/ssl/cert.key',
   versions: [:'tlsv1.2',:'tlsv1.3'],
   log_level: :debug,

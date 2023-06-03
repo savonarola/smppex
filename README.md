@@ -53,4 +53,7 @@ This software is licensed under [MIT License](LICENSE).
 
 The picture for the project was made by [Igor Garybaldi](http://pandabanda.com/).
 
-[![Sponsored by FunBox](https://funbox.ru/badges/sponsored_by_funbox_centered.svg)](https://funbox.ru)
+## Project support
+
+* 2017-2023 © [FunBox](https://gihub.com/funbox/smppex)
+* From 2023 © [Ilya Averyanov](https://av.rubybox.dev)

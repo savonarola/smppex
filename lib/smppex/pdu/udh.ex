@@ -4,7 +4,7 @@ defmodule SMPPEX.Pdu.UDH do
   """
 
   alias SMPPEX.Pdu
-  use Bitwise
+  import Bitwise
 
   @esm_class_gsm_udhi 0b01000000
 

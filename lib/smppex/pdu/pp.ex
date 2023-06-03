@@ -24,7 +24,7 @@ defmodule SMPPEX.Pdu.PP do
 
       iex> pdu = SMPPEX.Pdu.Factory.submit_sm({"from", 1, 1}, {"to", 1, 1}, "hello")
 
-  Then `pdu |> SMPPEX.Pdu.PP.format |> IO.puts` will print:
+  Then `pdu |> SMPPEX.Pdu.PP.format |> IO.puts()` will print:
 
   ```
   pdu: submit_sm

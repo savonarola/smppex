@@ -5,7 +5,7 @@ openssl req \
     -new \
     -nodes \
     -key ca.key \
-    -subj "/C=RU/ST=Moscow/O=RubyBox/CN=rubybox.ru" \
+    -subj "/C=LT/ST=Vilniaus/L=Vilnius/O=RubyBox/CN=rubybox.dev" \
     -sha256 \
     -days 10000 \
     -out ca.crt
@@ -14,30 +14,30 @@ openssl req \
     -batch \
     -new \
     -key cert.key \
-    -subj '/CN=localhost/O=SMPPEX/C=RU/ST=Moscow/L=Moscow' \
-    -out localhost.csr
+    -subj '/CN=good.rubybox.dev/O=SMPPEX/C=LT/ST=Vilniaus/L=Vilnius' \
+    -out good.rubybox.dev.csr
 
 openssl x509 \
     -req \
-    -in localhost.csr \
+    -in good.rubybox.dev.csr \
     -days 10000 \
     -CA ca.crt \
     -CAkey ca.key \
     -CAcreateserial \
-    -out localhost.crt
+    -out good.rubybox.dev.crt
 
 openssl req \
     -batch \
     -new \
     -key cert.key \
-    -subj '/CN=bad-hostname/O=SMPPEX/C=RU/ST=Moscow/L=Moscow' \
-    -out badhost.csr
+    -subj '/CN=bad.rubybox.dev/O=SMPPEX/C=LT/ST=Vilniaus/L=Vilnius' \
+    -out bad.rubybox.dev.csr
 
 openssl x509 \
     -req \
-    -in badhost.csr \
+    -in bad.rubybox.dev.csr \
     -days 10000 \
     -CA ca.crt \
     -CAkey ca.key \
     -CAcreateserial \
-    -out badhost.crt
+    -out bad.rubybox.dev.crt

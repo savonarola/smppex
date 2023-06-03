@@ -18,7 +18,8 @@ defmodule Support.SSL.MC do
         transport_opts: %{
           socket_opts: [
             port: port,
-            certfile: 'test/support/ssl/#{certname}',
+            cacertfile: 'test/support/ssl/ca.crt',
+            certfile: 'test/support/ssl/#{certname}.crt',
             keyfile: 'test/support/ssl/cert.key'
           ]
         }

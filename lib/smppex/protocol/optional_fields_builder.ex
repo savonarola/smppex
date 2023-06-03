@@ -4,8 +4,6 @@ defmodule SMPPEX.Protocol.OptionalFieldsBuilder do
   alias SMPPEX.Protocol.Pack
   alias SMPPEX.Protocol.TlvFormat
 
-  use Bitwise
-
   @spec build(map) :: {:ok, iodata} | {:error, any}
 
   def build(fields) when is_map(fields) do
