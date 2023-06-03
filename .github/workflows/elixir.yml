@@ -16,11 +16,6 @@ jobs:
       matrix:
         include:
 
-          # Elixir 1.11
-
-          - elixir: 1.11.4
-            otp_release: 24.3
-
           # Elixir 1.12
 
           - elixir: 1.12.3
