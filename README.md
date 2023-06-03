@@ -19,7 +19,7 @@ API documentation is available at **[hexdocs.pm/smppex](http://hexdocs.pm/smppex
 
 ## Live Demo
 
-There is a simple online demo MC (SMPP server) at **[smppex.rubybox.ru](http://smppex.rubybox.ru)**.
+There is a simple online demo MC (SMPP server) at **[smppex.rubybox.dev](http://smppex.rubybox.dev)**.
 
 ## Related projects
 
