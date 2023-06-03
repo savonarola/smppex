@@ -55,5 +55,5 @@ The picture for the project was made by [Igor Garybaldi](http://pandabanda.com/)
 
 ## Project support
 
-* 2017-2023 © [FunBox](https://gihub.com/funbox/smppex)
+* 2017-2023 © [FunBox](https://github.com/funbox/smppex)
 * From 2023 © [Ilya Averyanov](https://av.rubybox.dev)
