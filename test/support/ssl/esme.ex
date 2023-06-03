@@ -10,7 +10,7 @@ defmodule Support.SSL.ESME do
   @system_id "system_id"
   @password "password"
 
-  def start_link(port, delay \\ nil) do
+  def start_link(port, hostname, delay \\ nil) do
     SMPPEX.ESME.start_link(
       @host,
       port,
@@ -18,6 +18,7 @@ defmodule Support.SSL.ESME do
       transport: :ranch_ssl,
       socket_opts: [
         cacertfile: 'test/support/ssl/ca.crt',
+        server_name_indication: String.to_charlist(hostname),
         verify: :verify_peer
       ]
     )

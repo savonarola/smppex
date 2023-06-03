@@ -10,9 +10,9 @@ defmodule SMPPEX.Integration.SSLTest do
 
   test "pdu exchange" do
     port = Helpers.find_free_port()
-    start_supervised!({MC, {port, "localhost.crt"}})
+    start_supervised!({MC, {port, "good.rubybox.dev"}})
 
-    {:ok, _pid} = ESME.start_link(port)
+    {:ok, _pid} = ESME.start_link(port, "good.rubybox.dev")
 
     receive do
       {bind_resp, bind} ->
@@ -30,8 +30,8 @@ defmodule SMPPEX.Integration.SSLTest do
     case :string.to_integer(otp_release) do
       {n, ''} when n >= 20 ->
         port = Helpers.find_free_port()
-        start_supervised!({MC, {port, "badhost.crt"}})
-        {:error, {:tls_alert, _}} = ESME.start_link(port)
+        start_supervised!({MC, {port, "bad.rubybox.dev"}})
+        {:error, {:tls_alert, _}} = ESME.start_link(port, "good.rubybox.dev")
 
       _ ->
         assert true
