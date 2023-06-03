@@ -139,7 +139,7 @@ defmodule SMPPEX.SessionTest do
       x -> assert {:EXIT, ^esme, :oops} = x
     after
       50 ->
-        assert false
+        flunk("Expected exit message")
     end
 
     refute Process.alive?(esme)
@@ -228,7 +228,7 @@ defmodule SMPPEX.SessionTest do
       x -> assert {:EXIT, ^esme, {:bad_terminate_reply, :bad_resp}} = x
     after
       50 ->
-        assert false
+        flunk("Expected exit message")
     end
 
     refute Process.alive?(esme)
@@ -273,7 +273,7 @@ defmodule SMPPEX.SessionTest do
       x -> assert {:EXIT, ^esme, {:bad_handle_cast_reply, :foo}} = x
     after
       50 ->
-        assert false
+        flunk("Expected exit message")
     end
 
     refute Process.alive?(esme)
@@ -390,7 +390,7 @@ defmodule SMPPEX.SessionTest do
       x -> assert {:EXIT, ^esme, {:bad_handle_call_reply, :foo}} = x
     after
       50 ->
-        assert false
+        flunk("Expected exit message")
     end
 
     refute Process.alive?(esme)
@@ -466,7 +466,7 @@ defmodule SMPPEX.SessionTest do
       x -> assert {:EXIT, ^esme, {:bad_handle_info_reply, :foo}} = x
     after
       50 ->
-        assert false
+        flunk("Should have received an exit message")
     end
 
     refute Process.alive?(esme)
@@ -589,7 +589,7 @@ defmodule SMPPEX.SessionTest do
       x -> assert {:EXIT, ^esme, {:bad_handle_pdu_reply, :foo}} = x
     after
       50 ->
-        assert false
+        flunk("Should have received an exit message")
     end
 
     refute Process.alive?(esme)
@@ -775,7 +775,7 @@ defmodule SMPPEX.SessionTest do
       x -> assert {:EXIT, ^esme, {:bad_handle_resp_reply, :foo}} = x
     after
       50 ->
-        assert false
+        flunk("Expected exit message")
     end
 
     refute Process.alive?(esme)
@@ -932,7 +932,7 @@ defmodule SMPPEX.SessionTest do
       x -> assert {:EXIT, ^esme, {:bad_handle_resp_timeout_reply, :foo}} = x
     after
       50 ->
-        assert false
+        flunk("Expected exit message")
     end
 
     refute Process.alive?(esme)
@@ -1110,7 +1110,7 @@ defmodule SMPPEX.SessionTest do
       x -> assert {:EXIT, ^esme, {:bad_handle_unparsed_pdu_reply, :foo}} = x
     after
       50 ->
-        assert false
+        flunk("No exit received")
     end
 
     refute Process.alive?(esme)

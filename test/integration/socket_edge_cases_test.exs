@@ -22,7 +22,7 @@ defmodule SMPPEX.Integration.SocketEdgeCasesTest do
       {:EXIT, ^pid, {:socket_error, :closed}} -> :ok
     after
       1000 ->
-        flunk "ESME should have been terminated"
+        flunk("ESME should have been terminated")
     end
   end
 
@@ -38,7 +38,7 @@ defmodule SMPPEX.Integration.SocketEdgeCasesTest do
       {:EXIT, ^pid, {:socket_error, :closed}} -> :ok
     after
       1000 ->
-        flunk "ESME should have been terminated"
+        flunk("ESME should have been terminated")
     end
   end
 end

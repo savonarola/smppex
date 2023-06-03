@@ -20,7 +20,7 @@ defmodule SMPPEX.Integration.SSLTest do
         assert :bind_transceiver == Pdu.command_name(bind)
     after
       1000 ->
-        assert false
+        flunk("ESME should have received bind_resp packets")
     end
   end
 
