@@ -28,7 +28,7 @@ defmodule SMPPEX.SessionTest do
       enquire_link_resp_limit: 1000,
       inactivity_limit: 10_000,
       response_limit: 2000,
-      timer_resolution: 100_000
+      response_limit_resolution: 100_000
     ]
 
     esme_with_opts = fn handler, opts ->

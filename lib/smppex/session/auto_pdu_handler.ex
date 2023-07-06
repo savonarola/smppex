@@ -2,80 +2,88 @@ defmodule SMPPEX.Session.AutoPduHandler do
   @moduledoc false
 
   defstruct [
-    :by_sequence_number,
-    :by_ref
+    :pdu_storage,
+    :my_pdu_refs
   ]
 
   alias __MODULE__, as: AutoPduHandler
-  alias :ets, as: ETS
 
   alias SMPPEX.Pdu.Factory, as: PduFactory
+  alias SMPPEX.PduStorage
   alias SMPPEX.Pdu
 
   @type t :: %AutoPduHandler{}
 
-  def new do
+  @spec new(PduStorage.t) :: t
+
+  def new(pdu_storage) do
     %AutoPduHandler{
-      by_sequence_number: ETS.new(:by_sequence_number, [:set]),
-      by_ref: ETS.new(:by_ref, [:set])
+      # In PDU storage, we store request PDUs that we generated (enquire_link's)
+      pdu_storage: pdu_storage,
+      # In my_pdu_refs, we store refs of all PDUs that we generated (enquire_link's and enquire_link_resp's)
+      # We need this to track which PDUs we generated and tell the session to skip them
+      my_pdu_refs: MapSet.new()
     }
   end
 
-  @spec enquire_link(t, non_neg_integer, non_neg_integer) :: {Pdu.t(), non_neg_integer}
+  @spec enquire_link(t, non_neg_integer) :: {t, Pdu.t()}
 
-  def enquire_link(handler, expire_time, sequence_number) do
-    # increment before use
-    sequence_number = sequence_number + 1
+  def enquire_link(handler, sequence_number) do
     pdu = %Pdu{PduFactory.enquire_link() | sequence_number: sequence_number}
-    ETS.insert_new(handler.by_ref, {Pdu.ref(pdu), true})
-    ETS.insert_new(handler.by_sequence_number, {sequence_number, {expire_time, pdu}})
-    {pdu, sequence_number}
+    new_pdu_storage = PduStorage.store(handler.pdu_storage, pdu)
+    new_my_pdu_refs = MapSet.put(handler.my_pdu_refs, Pdu.ref(pdu))
+    {%AutoPduHandler{handler | pdu_storage: new_pdu_storage, my_pdu_refs: new_my_pdu_refs}, pdu}
   end
 
-  @spec handle_send_pdu_result(t, Pdu.t()) :: :proceed | :skip
+  @spec handle_send_pdu_result(t, Pdu.t()) :: {t, :proceed | :skip}
 
   def handle_send_pdu_result(handler, pdu) do
-    case ETS.take(handler.by_ref, Pdu.ref(pdu)) do
-      [_] -> :skip
-      [] -> :proceed
+    ref = Pdu.ref(pdu)
+    case MapSet.member?(handler.my_pdu_refs, ref) do
+      true ->
+        new_my_pdu_refs = MapSet.delete(handler.my_pdu_refs, ref)
+        {%AutoPduHandler{handler | my_pdu_refs: new_my_pdu_refs}, :skip}
+      false ->
+        {handler, :proceed}
     end
   end
 
-  @spec handle_pdu(t, Pdu.t(), non_neg_integer) :: :proceed | {:skip, [Pdu.t()], non_neg_integer}
+  @spec handle_pdu(t, Pdu.t()) :: {t, :proceed} | {t, :skip, [Pdu.t()]}
 
-  def handle_pdu(handler, pdu, sequence_number) do
+  def handle_pdu(handler, pdu) do
     cond do
       Pdu.resp?(pdu) ->
-        handle_resp(handler, pdu, sequence_number)
+        handle_resp(handler, pdu)
 
       Pdu.command_name(pdu) == :enquire_link ->
-        handle_enquire_link(handler, pdu, sequence_number)
+        handle_enquire_link(handler, pdu)
 
       true ->
-        :proceed
+        {handler, :proceed}
     end
   end
 
-  @spec drop_expired(t, non_neg_integer) :: non_neg_integer
+  @spec drop_expired(t) :: :ok
 
-  def drop_expired(handler, now_time) do
-    ETS.select_delete(handler.by_sequence_number, [
-      {{:_, {:"$1", :"$2"}}, [{:<, :"$1", now_time}], [true]}
-    ])
+  def drop_expired(handler) do
+    PduStorage.fetch_expired(handler.pdu_storage)
+    :ok
   end
 
-  defp handle_resp(handler, pdu, sequence_number) do
-    case ETS.take(handler.by_sequence_number, Pdu.sequence_number(pdu)) do
-      [_] -> {:skip, [], sequence_number}
-      [] -> :proceed
+  defp handle_resp(handler, pdu) do
+    case PduStorage.fetch(handler.pdu_storage, Pdu.sequence_number(pdu)) do
+      {new_pdu_storage, [_pdu]} ->
+        new_handler = %AutoPduHandler{handler | pdu_storage: new_pdu_storage}
+        {new_handler, :skip}
+      {new_pdu_storage, []} ->
+        new_handler = %AutoPduHandler{handler | pdu_storage: new_pdu_storage}
+        {new_handler, :proceed}
     end
   end
 
-  defp handle_enquire_link(handler, pdu, sequence_number) do
+  defp handle_enquire_link(handler, pdu) do
     resp = PduFactory.enquire_link_resp() |> Pdu.as_reply_to(pdu)
-
-    ETS.insert_new(handler.by_ref, {Pdu.ref(resp), true})
-
-    {:skip, [resp], sequence_number}
+    new_my_pdu_refs = MapSet.put(handler.my_pdu_refs, Pdu.ref(resp))
+    {%AutoPduHandler{handler | my_pdu_refs: new_my_pdu_refs}, :skip, [resp]}
   end
 end
