@@ -187,7 +187,7 @@ defmodule SMPPEX.ESME.Sync do
   end
 
   @impl SMPPEX.Session
-  def terminate(_reason, _los_pdus, st) do
+  def terminate(_reason, _lost_pdus, st) do
     case st.pdu_waiter do
       nil -> :nop
       from -> reply(from, :stop)

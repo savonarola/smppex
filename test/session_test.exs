@@ -1038,7 +1038,7 @@ defmodule SMPPEX.SessionTest do
       ctx[:esme].(fn
         {:init, _socket, _transport}, st -> {:ok, st}
         {:handle_unparsed_pdu, _pdu, _error}, st -> {:stop, :nopenope, st}
-        {:terminate, _pdu, _los_pdus}, _st -> :stop
+        {:terminate, _pdu, _lost_pdus}, _st -> :stop
       end)
 
     Server.send(ctx[:server], <<
@@ -1081,7 +1081,7 @@ defmodule SMPPEX.SessionTest do
       ctx[:esme].(fn
         {:init, _socket, _transport}, st -> {:ok, st}
         {:handle_unparsed_pdu, _pdu, _error}, _st -> :foo
-        {:terminate, _pdu, _los_pdus}, _st -> :stop
+        {:terminate, _pdu, _lost_pdus}, _st -> :stop
       end)
 
     Server.send(ctx[:server], <<
@@ -1264,7 +1264,7 @@ defmodule SMPPEX.SessionTest do
         {:handle_send_pdu_result, _pdu, _result}, st -> st
         {:handle_resp, _pdu, _original_pdu}, st -> {:ok, st}
         {:handle_timeout, reason}, _st -> reason
-        {:terminate, _reason, _los_pdus}, _st -> :stop
+        {:terminate, _reason, _lost_pdus}, _st -> :stop
       end)
 
     Session.send_pdu(esme, pdu)
@@ -1286,7 +1286,7 @@ defmodule SMPPEX.SessionTest do
              {:handle_send_pdu_result, _, :ok},
              {:handle_resp, _, _},
              {:handle_timeout, :enquire_link_timer},
-             {:terminate, :enquire_link_timer, _los_pdus}
+             {:terminate, :enquire_link_timer, _lost_pdus}
            ] = ctx[:callbacks].()
 
     refute Process.alive?(esme)
@@ -1303,7 +1303,7 @@ defmodule SMPPEX.SessionTest do
         {:handle_send_pdu_result, _pdu, _result}, st -> st
         {:handle_resp, _pdu, _original_pdu}, st -> {:ok, st}
         {:handle_timeout, reason}, _st -> reason
-        {:terminate, _reason, _los_pdus}, _st -> :stop
+        {:terminate, _reason, _lost_pdus}, _st -> :stop
       end)
 
     Session.send_pdu(esme, pdu)
@@ -1338,7 +1338,7 @@ defmodule SMPPEX.SessionTest do
         fn
           {:init, _socket, _transport}, st -> {:ok, st}
           {:handle_timeout, reason}, _st -> reason
-          {:terminate, _reason, _los_pdus}, _st -> :stop
+          {:terminate, _reason, _lost_pdus}, _st -> :stop
         end,
         session_init_limit: 1000
       )
@@ -1364,7 +1364,7 @@ defmodule SMPPEX.SessionTest do
           {:init, _socket, _transport}, st -> {:ok, st}
           {:handle_send_pdu_result, _pdu, _result}, st -> st
           {:handle_resp, _pdu, _original_pdu}, st -> {:ok, st}
-          {:terminate, _reason, _los_pdus}, _st -> :stop
+          {:terminate, _reason, _lost_pdus}, _st -> :stop
         end,
         session_init_limit: 1000
       )
@@ -1426,7 +1426,7 @@ defmodule SMPPEX.SessionTest do
       ctx[:esme].(fn
         {:init, _socket, _transport}, st -> {:ok, st}
         {:handle_send_pdu_result, _pdu, _result}, st -> st
-        {:terminate, _reason, _los_pdus}, _st -> :stop
+        {:terminate, _reason, _lost_pdus}, _st -> :stop
       end)
 
     Session.send_pdu(esme, pdu)
@@ -1497,7 +1497,7 @@ defmodule SMPPEX.SessionTest do
       ctx[:esme].(fn
         {:init, _socket, _transport}, st -> {:ok, st}
         {:handle_socket_closed}, st -> {:ooops, st}
-        {:terminate, _reason, _los_pdus}, _st -> :stop
+        {:terminate, _reason, _lost_pdus}, _st -> :stop
       end)
 
     Server.stop(ctx[:server])
@@ -1518,7 +1518,7 @@ defmodule SMPPEX.SessionTest do
       ctx[:esme].(fn
         {:init, _socket, _transport}, st -> {:ok, st}
         {:handle_socket_error, :wow_such_socket_error}, st -> {:ooops, st}
-        {:terminate, _reason, _los_pdus}, _st -> :stop
+        {:terminate, _reason, _lost_pdus}, _st -> :stop
       end)
 
     {_ok, _closed, error, _passive} = Support.Session.socket_messages()
