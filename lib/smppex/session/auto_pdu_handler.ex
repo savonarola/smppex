@@ -14,7 +14,7 @@ defmodule SMPPEX.Session.AutoPduHandler do
 
   @type t :: %AutoPduHandler{}
 
-  @spec new(PduStorage.t) :: t
+  @spec new(PduStorage.t()) :: t
 
   def new(pdu_storage) do
     %AutoPduHandler{
@@ -39,10 +39,12 @@ defmodule SMPPEX.Session.AutoPduHandler do
 
   def handle_send_pdu_result(handler, pdu) do
     ref = Pdu.ref(pdu)
+
     case MapSet.member?(handler.my_pdu_refs, ref) do
       true ->
         new_my_pdu_refs = MapSet.delete(handler.my_pdu_refs, ref)
         {%AutoPduHandler{handler | my_pdu_refs: new_my_pdu_refs}, :skip}
+
       false ->
         {handler, :proceed}
     end
@@ -75,6 +77,7 @@ defmodule SMPPEX.Session.AutoPduHandler do
       {new_pdu_storage, [_pdu]} ->
         new_handler = %AutoPduHandler{handler | pdu_storage: new_pdu_storage}
         {new_handler, :skip}
+
       {new_pdu_storage, []} ->
         new_handler = %AutoPduHandler{handler | pdu_storage: new_pdu_storage}
         {new_handler, :proceed}

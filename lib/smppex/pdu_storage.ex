@@ -6,14 +6,12 @@ defmodule SMPPEX.PduStorage do
   alias SMPPEX.PduStorage
   alias SMPPEX.Pdu
 
-  defstruct [
-    id: nil,
-    by_sequence_number: nil,
-    by_expire: nil,
-    ttl: nil,
-    ttl_threshold: nil,
-    timer: nil
-  ]
+  defstruct id: nil,
+            by_sequence_number: nil,
+            by_expire: nil,
+            ttl: nil,
+            ttl_threshold: nil,
+            timer: nil
 
   @type t :: %PduStorage{}
 
@@ -49,6 +47,7 @@ defmodule SMPPEX.PduStorage do
         ETS.delete(storage.by_expire, {{create_time, ref}, sequence_number})
         new_storage = reschedule_expire(storage, create_time)
         {new_storage, [pdu]}
+
       [] ->
         {storage, []}
     end
@@ -64,11 +63,12 @@ defmodule SMPPEX.PduStorage do
         {{{:"$1", :"$2"}, :"$3"}, [{:<, :"$1", deadline}], [{:"$2", :"$3"}]}
       ])
 
-    pdus = for {ref, sequence_number} <- expired, into: [] do
-      [{_sn, {create_time, pdu}}] = ETS.take(storage.by_sequence_number, sequence_number)
-      ETS.delete(storage.by_expire, {create_time, ref})
-      pdu
-    end
+    pdus =
+      for {ref, sequence_number} <- expired, into: [] do
+        [{_sn, {create_time, pdu}}] = ETS.take(storage.by_sequence_number, sequence_number)
+        ETS.delete(storage.by_expire, {create_time, ref})
+        pdu
+      end
 
     {reschedule_expire(storage, nil), pdus}
   end
@@ -89,6 +89,7 @@ defmodule SMPPEX.PduStorage do
     timer = :erlang.send_after(timer_interval, self(), {:expire_pdus, id})
     %PduStorage{storage | timer: timer}
   end
+
   defp schedule_expire(storage, _) do
     storage
   end
@@ -96,6 +97,7 @@ defmodule SMPPEX.PduStorage do
   defp cancel_expire(%PduStorage{timer: nil} = storage) do
     storage
   end
+
   defp cancel_expire(%PduStorage{timer: timer} = storage) do
     :erlang.cancel_timer(timer)
     %PduStorage{storage | timer: nil}
@@ -115,7 +117,8 @@ defmodule SMPPEX.PduStorage do
         else
           storage
         end
-      :'$end_of_table' ->
+
+      :"$end_of_table" ->
         # Nothing left in storage, cancel timer
         cancel_expire(storage)
     end
@@ -123,11 +126,11 @@ defmodule SMPPEX.PduStorage do
 
   defp timer_interval(%PduStorage{ttl_threshold: ttl_threshold, ttl: ttl}, create_time) do
     interval = create_time + ttl + ttl_threshold - :erlang.monotonic_time()
+
     if interval < 0 do
       ttl_threshold
     else
       interval
     end
   end
-
 end

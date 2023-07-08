@@ -383,7 +383,13 @@ defmodule SMPPEX.Session do
           )
 
         response_limit = Keyword.get(session_opts, :response_limit, Defaults.response_limit())
-        response_limit_resolution = Keyword.get(session_opts, :response_limit_resolution, Defaults.response_limit_resolution())
+
+        response_limit_resolution =
+          Keyword.get(
+            session_opts,
+            :response_limit_resolution,
+            Defaults.response_limit_resolution()
+          )
 
         pdu_storage = PduStorage.new(:custom_pdus, response_limit, response_limit_resolution)
         auto_pdu_storage = PduStorage.new(:auto_pdus, response_limit, response_limit_resolution)
@@ -419,7 +425,10 @@ defmodule SMPPEX.Session do
 
     case AutoPduHandler.handle_pdu(new_st.auto_pdu_handler, pdu) do
       {new_auto_pdu_handler, :proceed} ->
-        handle_pdu_by_callback_module(pdu, %Session{new_st | auto_pdu_handler: new_auto_pdu_handler})
+        handle_pdu_by_callback_module(pdu, %Session{
+          new_st
+          | auto_pdu_handler: new_auto_pdu_handler
+        })
 
       {new_auto_pdu_handler, :skip, pdus} ->
         {:ok, pdus, %Session{new_st | auto_pdu_handler: new_auto_pdu_handler}}
@@ -554,6 +563,7 @@ defmodule SMPPEX.Session do
     case PduStorage.fetch(st.pdus, sequence_number) do
       {new_pdu_storage, []} ->
         new_st = %Session{st | pdus: new_pdu_storage}
+
         Logger.info(
           "Session #{inspect(self())}, resp for unknown pdu(sequence_number: #{sequence_number}), dropping"
         )
@@ -601,6 +611,7 @@ defmodule SMPPEX.Session do
   defp check_expired_pdus(:auto_pdus, st) do
     AutoPduHandler.drop_expired(st.auto_pdu_handler)
   end
+
   defp check_expired_pdus(:custom_pdus, st) do
     case PduStorage.fetch_expired(st.pdus) do
       {new_pdu_storage, []} ->
@@ -626,6 +637,7 @@ defmodule SMPPEX.Session do
 
       {:enquire_link, new_timers} ->
         new_sequence_number = st.sequence_number + 1
+
         {enquire_link, new_sequence_number} =
           AutoPduHandler.enquire_link(
             st.auto_pdu_handler,
