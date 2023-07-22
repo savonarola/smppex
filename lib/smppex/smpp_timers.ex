@@ -106,7 +106,7 @@ defmodule SMPPEX.SMPPTimers do
         timers
 
       timer_ref ->
-        :erlang.cancel_timer(timer_ref)
+        Klotho.cancel_timer(timer_ref)
         Map.put(timers, timer_name, nil)
     end
   end
@@ -117,7 +117,7 @@ defmodule SMPPEX.SMPPTimers do
   end
 
   defp schedule_timer(timers, timer_name, interval) do
-    timer_ref = :erlang.send_after(interval, self(), {:smpp_timer, timer_name})
+    timer_ref = Klotho.send_after(interval, self(), {:smpp_timer, timer_name})
     Map.put(timers, timer_name, timer_ref)
   end
 end

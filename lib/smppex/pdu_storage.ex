@@ -32,7 +32,7 @@ defmodule SMPPEX.PduStorage do
   def store(storage, %Pdu{} = pdu) do
     sequence_number = Pdu.sequence_number(pdu)
     ref = Pdu.ref(pdu)
-    create_time = :erlang.monotonic_time()
+    create_time = Klotho.monotonic_time()
     ETS.insert_new(storage.by_sequence_number, {sequence_number, {create_time, pdu}})
     ETS.insert_new(storage.by_expire, {{create_time, ref}, sequence_number})
     schedule_expire(storage, create_time)
@@ -56,7 +56,7 @@ defmodule SMPPEX.PduStorage do
   @spec fetch_expired(t) :: {t, [Pdu.t()]}
 
   def fetch_expired(storage) do
-    deadline = :erlang.monotonic_time() - storage.ttl
+    deadline = Klotho.monotonic_time() - storage.ttl
 
     expired =
       ETS.select(storage.by_expire, [
@@ -86,7 +86,7 @@ defmodule SMPPEX.PduStorage do
   # Because if it is already scheduled, it is scheduled on earlier time.
   defp schedule_expire(%PduStorage{id: id, timer: nil} = storage, create_time) do
     timer_interval = timer_interval(storage, create_time)
-    timer = :erlang.send_after(timer_interval, self(), {:expire_pdus, id})
+    timer = Klotho.send_after(timer_interval, self(), {:expire_pdus, id})
     %PduStorage{storage | timer: timer}
   end
 
@@ -99,7 +99,7 @@ defmodule SMPPEX.PduStorage do
   end
 
   defp cancel_expire(%PduStorage{timer: timer} = storage) do
-    :erlang.cancel_timer(timer)
+    Klotho.cancel_timer(timer)
     %PduStorage{storage | timer: nil}
   end
 
@@ -125,7 +125,7 @@ defmodule SMPPEX.PduStorage do
   end
 
   defp timer_interval(%PduStorage{ttl_threshold: ttl_threshold, ttl: ttl}, create_time) do
-    interval = create_time + ttl + ttl_threshold - :erlang.monotonic_time()
+    interval = create_time + ttl + ttl_threshold - Klotho.monotonic_time()
 
     if interval < 0 do
       ttl_threshold
