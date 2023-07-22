@@ -6,6 +6,8 @@ defmodule SMPPEX.PduStorage do
   alias SMPPEX.PduStorage
   alias SMPPEX.Pdu
 
+  import Ex2ms
+
   defstruct id: nil,
             by_sequence_number: nil,
             by_expire: nil,
@@ -32,7 +34,7 @@ defmodule SMPPEX.PduStorage do
   def store(storage, %Pdu{} = pdu) do
     sequence_number = Pdu.sequence_number(pdu)
     ref = Pdu.ref(pdu)
-    create_time = Klotho.monotonic_time()
+    create_time = Klotho.monotonic_time(:millisecond)
     ETS.insert_new(storage.by_sequence_number, {sequence_number, {create_time, pdu}})
     ETS.insert_new(storage.by_expire, {{create_time, ref}, sequence_number})
     schedule_expire(storage, create_time)
@@ -56,12 +58,15 @@ defmodule SMPPEX.PduStorage do
   @spec fetch_expired(t) :: {t, [Pdu.t()]}
 
   def fetch_expired(storage) do
-    deadline = Klotho.monotonic_time() - storage.ttl
+    deadline = Klotho.monotonic_time(:millisecond) - storage.ttl
 
-    expired =
-      ETS.select(storage.by_expire, [
-        {{{:"$1", :"$2"}, :"$3"}, [{:<, :"$1", deadline}], [{:"$2", :"$3"}]}
-      ])
+    expired_ms =
+      fun do
+        {{create_time, ref}, sequence_number} when create_time < ^deadline ->
+          {ref, sequence_number}
+      end
+
+    expired = ETS.select(storage.by_expire, expired_ms)
 
     pdus =
       for {ref, sequence_number} <- expired, into: [] do
@@ -125,7 +130,7 @@ defmodule SMPPEX.PduStorage do
   end
 
   defp timer_interval(%PduStorage{ttl_threshold: ttl_threshold, ttl: ttl}, create_time) do
-    interval = create_time + ttl + ttl_threshold - Klotho.monotonic_time()
+    interval = create_time + ttl + ttl_threshold - Klotho.monotonic_time(:millisecond)
 
     if interval < 0 do
       ttl_threshold
