@@ -69,7 +69,7 @@ defmodule SMPPEX.SMPPTimers do
     |> cancel_timer(:enquire_link_resp_timer)
   end
 
-  @type timer_event_result :: {:ok, t} | {:stop, reason :: stop_reason} | {:enquire_link, t}
+  @type timer_event_result :: {:stop, reason :: stop_reason} | {:enquire_link, t}
 
   @spec handle_timer_event(t, timer_event) :: timer_event_result
 

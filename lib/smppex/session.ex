@@ -628,10 +628,6 @@ defmodule SMPPEX.Session do
 
   defp check_timers(timer_event, st) do
     case SMPPTimers.handle_timer_event(st.timers, timer_event) do
-      {:ok, new_timers} ->
-        new_st = %Session{st | timers: new_timers}
-        {:noreply, [], new_st}
-
       {:stop, reason} ->
         exit_reason = st.module.handle_timeout(reason, st.module_state)
         {:stop, exit_reason, [], st}
