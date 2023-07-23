@@ -12,9 +12,9 @@ defmodule Support.TCP.Helpers do
     port
   end
 
-  def wait_match(fun, n \\ 10, interval \\ 10)
+  def wait_match(fun, n \\ 20, interval \\ 5)
 
-  def wait_match(fun, n, interval) when n <= 0 do
+  def wait_match(_fun, n, _interval) when n <= 0 do
     false
   end
 

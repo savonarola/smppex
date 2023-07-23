@@ -69,11 +69,11 @@ defmodule Support.Session do
     register(st, {:terminate, reason, lost_pdus})
   end
 
-  defp register({pid, handler} = st, callback_info) do
-    Agent.update(pid, fn callbacks ->
+  defp register({agent_pid, handler, test_pid} = st, callback_info) do
+    Agent.update(agent_pid, fn callbacks ->
       [callback_info | callbacks]
     end)
-
+    send(test_pid, callback_info)
     handler.(callback_info, st)
   end
 end
