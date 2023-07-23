@@ -5,94 +5,119 @@ defmodule SMPPEX.SMPPTimers do
 
   # :established -> :bound
   # :active <-> :waiting_resp
-  defstruct connection_time: 0,
-            session_init_state: :established,
-            session_init_limit: 0,
-            last_peer_action_time: 0,
-            enquire_link_state: :active,
-            enquire_link_limit: 0,
-            enquire_link_resp_limit: 0,
-            last_transaction_time: 0,
-            inactivity_limit: 0
+  defstruct(
+    # session_init_timer
+    session_init_state: :established,
+    session_init_limit: 0,
+    session_init_timer: nil,
+
+    # enquire_link_timer
+    enquire_link_state: :active,
+    enquire_link_limit: 0,
+    enquire_link_timer: nil,
+
+    # enquire_link_resp_timer
+    enquire_link_resp_limit: 0,
+    enquire_link_resp_timer: nil,
+
+    # inactivity_timer
+    inactivity_limit: 0,
+    inactivity_timer: nil
+  )
 
   @type t :: %SMPPTimers{}
 
   @type stop_reason :: :session_init_timer | :inactivity_timer | :enquire_link_timer
+  @type timer_name ::
+          :session_init_timer | :inactivity_timer | :enquire_link_timer | :enquire_link_resp_timer
+  @type timer_event :: {:smpp_timer, timer_name}
 
-  @spec new(non_neg_integer, timeout, timeout, timeout, timeout) :: t
+  @spec new(timeout, timeout, timeout, timeout) :: t
 
-  def new(time, session_init_limit, enquire_link_limit, enquire_link_resp_limit, inactivity_limit) do
+  def new(session_init_limit, enquire_link_limit, enquire_link_resp_limit, inactivity_limit) do
     %SMPPTimers{
-      connection_time: time,
       session_init_limit: session_init_limit,
       enquire_link_limit: enquire_link_limit,
       enquire_link_resp_limit: enquire_link_resp_limit,
       inactivity_limit: inactivity_limit
     }
+    |> reschedule_timer(:session_init_timer, :session_init_limit)
   end
 
-  @spec handle_bind(t, non_neg_integer) :: t
+  @spec handle_bind(t) :: t
 
-  def handle_bind(timers, time) do
-    handle_peer_transaction(%SMPPTimers{timers | session_init_state: :bound}, time)
+  def handle_bind(timers) do
+    %SMPPTimers{timers | session_init_state: :bound}
+    |> cancel_timer(:session_init_timer)
+    |> reschedule_timer(:inactivity_timer, :inactivity_limit)
+    |> reschedule_timer(:enquire_link_timer, :enquire_link_limit)
   end
 
-  @spec handle_peer_transaction(t, non_neg_integer) :: t
+  @spec handle_peer_transaction(t) :: t
 
-  def handle_peer_transaction(timers, time) do
-    handle_peer_action(%SMPPTimers{timers | last_transaction_time: time}, time)
+  def handle_peer_transaction(timers) do
+    timers
+    |> handle_peer_action()
+    |> reschedule_timer(:inactivity_timer, :inactivity_limit)
   end
 
-  @spec handle_peer_action(t, non_neg_integer) :: t
+  @spec handle_peer_action(t) :: t
 
-  def handle_peer_action(timers, time) do
-    %SMPPTimers{timers | last_peer_action_time: time, enquire_link_state: :active}
+  def handle_peer_action(timers) do
+    %SMPPTimers{timers | enquire_link_state: :active}
+    |> reschedule_timer(:enquire_link_timer, :enquire_link_limit)
+    |> cancel_timer(:enquire_link_resp_timer)
   end
 
-  @type tick_result :: {:ok, t} | {:stop, reason :: stop_reason} | {:enquire_link, t}
+  @type timer_event_result :: {:stop, reason :: stop_reason} | {:enquire_link, t}
 
-  @spec handle_tick(t, non_neg_integer) :: tick_result
+  @spec handle_timer_event(t, timer_event) :: timer_event_result
 
-  def handle_tick(timers, time) do
-    case timers.session_init_state do
-      :established -> handle_unbound_tick(timers, time)
-      :bound -> handle_bound_tick(timers, time)
+  def handle_timer_event(_timers, {:smpp_timer, :inactivity_timer}) do
+    {:stop, :inactivity_timer}
+  end
+
+  def handle_timer_event(_timers, {:smpp_timer, :session_init_timer}) do
+    {:stop, :session_init_timer}
+  end
+
+  def handle_timer_event(timers, {:smpp_timer, :enquire_link_timer}) do
+    new_timers =
+      %SMPPTimers{timers | enquire_link_state: :waiting_resp}
+      |> cancel_timer(:enquire_link_timer)
+      |> reschedule_timer(:enquire_link_resp_timer, :enquire_link_resp_limit)
+
+    {:enquire_link, new_timers}
+  end
+
+  def handle_timer_event(_timers, {:smpp_timer, :enquire_link_resp_timer}) do
+    {:stop, :enquire_link_timer}
+  end
+
+  defp reschedule_timer(timers, timer_name, interval_name) do
+    timers_new = cancel_timer(timers, timer_name)
+    interval = Map.fetch!(timers, interval_name)
+    schedule_timer(timers_new, timer_name, interval)
+  end
+
+  defp cancel_timer(timers, timer_name) do
+    case Map.fetch!(timers, timer_name) do
+      nil ->
+        timers
+
+      timer_ref ->
+        Klotho.cancel_timer(timer_ref)
+        Map.put(timers, timer_name, nil)
     end
   end
 
-  defp handle_unbound_tick(timers, time) do
-    case time - timers.connection_time > timers.session_init_limit do
-      true -> {:stop, :session_init_timer}
-      false -> {:ok, timers}
-    end
+  defp schedule_timer(timers, _timer_name, interval)
+       when interval == 0 or interval == :infinity do
+    timers
   end
 
-  defp handle_bound_tick(timers, time) do
-    case time - timers.last_transaction_time > timers.inactivity_limit do
-      true -> {:stop, :inactivity_timer}
-      false -> check_enquire_link(timers, time)
-    end
-  end
-
-  defp check_enquire_link(timers, time) do
-    case timers.enquire_link_state do
-      :active -> check_active_enquire_link(timers, time)
-      :waiting_resp -> check_waiting_enquire_link(timers, time)
-    end
-  end
-
-  defp check_active_enquire_link(timers, time) do
-    case time - timers.last_peer_action_time > timers.enquire_link_limit do
-      true -> {:enquire_link, %SMPPTimers{timers | enquire_link_state: :waiting_resp}}
-      false -> {:ok, timers}
-    end
-  end
-
-  defp check_waiting_enquire_link(timers, time) do
-    case time - timers.last_peer_action_time >
-           timers.enquire_link_limit + timers.enquire_link_resp_limit do
-      true -> {:stop, :enquire_link_timer}
-      false -> {:ok, timers}
-    end
+  defp schedule_timer(timers, timer_name, interval) do
+    timer_ref = Klotho.send_after(interval, self(), {:smpp_timer, timer_name})
+    Map.put(timers, timer_name, timer_ref)
   end
 end

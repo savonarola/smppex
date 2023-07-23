@@ -1,8 +1,6 @@
 defmodule Support.SSL.ESME do
   @moduledoc false
 
-  alias :timer, as: Timer
-
   use SMPPEX.Session
 
   @host "localhost"
@@ -24,23 +22,23 @@ defmodule Support.SSL.ESME do
     )
   end
 
-  @impl true
+  @impl SMPPEX.Session
   def init(_socket, _transport, st) do
     if st.delay do
-      Timer.sleep(st.delay)
+      st.delay.()
     end
 
     send(self(), :bind)
     {:ok, st}
   end
 
-  @impl true
+  @impl SMPPEX.Session
   def handle_info(:bind, st) do
     pdu = SMPPEX.Pdu.Factory.bind_transceiver(@system_id, @password)
     {:noreply, [pdu], st}
   end
 
-  @impl true
+  @impl SMPPEX.Session
   def handle_resp(resp, original_pdu, st) do
     send(st.pid, {resp, original_pdu})
     {:stop, :normal, st}

@@ -1,26 +1,16 @@
 defmodule SMPPEX.SessionTest do
   use ExUnit.Case
 
-  alias :timer, as: Timer
-  alias :sys, as: Sys
-
   alias Support.TCP.Server
   alias SMPPEX.Session
   alias SMPPEX.Pdu
 
+  import Support.TCP.Helpers
+
   setup do
     server = Server.start_link()
 
-    Timer.sleep(50)
-
     {:ok, callback_agent} = Agent.start_link(fn -> [] end)
-
-    callbacks = fn ->
-      Agent.get(
-        callback_agent,
-        &Enum.reverse(&1)
-      )
-    end
 
     esme_opts = [
       enquire_link_limit: 1000,
@@ -28,14 +18,16 @@ defmodule SMPPEX.SessionTest do
       enquire_link_resp_limit: 1000,
       inactivity_limit: 10_000,
       response_limit: 2000,
-      timer_resolution: 100_000
+      response_limit_resolution: 0
     ]
 
     esme_with_opts = fn handler, opts ->
+      test_pid = self()
+
       case SMPPEX.ESME.start_link(
              {127, 0, 0, 1},
              Server.port(server),
-             {Support.Session, {callback_agent, handler}},
+             {Support.Session, {callback_agent, handler, test_pid}},
              esme_opts: opts
            ) do
         {:ok, pid} -> pid
@@ -44,6 +36,15 @@ defmodule SMPPEX.SessionTest do
     end
 
     esme = &esme_with_opts.(&1, esme_opts)
+
+    callbacks = fn ->
+      Agent.get(
+        callback_agent,
+        &Enum.reverse(&1)
+      )
+    end
+
+    Klotho.Mock.reset()
 
     {:ok, esme: esme, esme_with_opts: esme_with_opts, callbacks: callbacks, server: server}
   end
@@ -58,11 +59,14 @@ defmodule SMPPEX.SessionTest do
       end)
 
     Session.send_pdu(esme, pdu)
-    Timer.sleep(50)
 
-    assert {:ok, {:pdu, pdu1}, _} = Server.received_data(ctx[:server]) |> SMPPEX.Protocol.parse()
-    assert Pdu.mandatory_field(pdu, :system_id) == Pdu.mandatory_field(pdu1, :system_id)
-    assert Pdu.mandatory_field(pdu, :password) == Pdu.mandatory_field(pdu1, :password)
+    assert wait_match(fn ->
+             {:ok, {:pdu, pdu1}, _} =
+               Server.received_data(ctx[:server]) |> SMPPEX.Protocol.parse()
+
+             assert Pdu.mandatory_field(pdu, :system_id) == Pdu.mandatory_field(pdu1, :system_id)
+             assert Pdu.mandatory_field(pdu, :password) == Pdu.mandatory_field(pdu1, :password)
+           end)
   end
 
   test "send_pdu sequence_numbers", ctx do
@@ -76,15 +80,18 @@ defmodule SMPPEX.SessionTest do
       end)
 
     Session.send_pdu(esme, pdu1)
+    assert_receive {:handle_send_pdu_result, _, :ok}
     Session.send_pdu(esme, pdu2)
-    Timer.sleep(50)
+    assert_receive {:handle_send_pdu_result, _, :ok}
 
-    assert {:ok, {:pdu, pdu1r}, rest_data} =
-             Server.received_data(ctx[:server]) |> SMPPEX.Protocol.parse()
+    assert wait_match(fn ->
+             {:ok, {:pdu, pdu1r}, rest_data} =
+               Server.received_data(ctx[:server]) |> SMPPEX.Protocol.parse()
 
-    assert {:ok, {:pdu, pdu2r}, _} = rest_data |> SMPPEX.Protocol.parse()
-    assert Pdu.sequence_number(pdu1r) == 1
-    assert Pdu.sequence_number(pdu2r) == 2
+             {:ok, {:pdu, pdu2r}, _} = rest_data |> SMPPEX.Protocol.parse()
+             assert Pdu.sequence_number(pdu1r) == 1
+             assert Pdu.sequence_number(pdu2r) == 2
+           end)
   end
 
   test "reply, reply sequence_number", ctx do
@@ -103,18 +110,21 @@ defmodule SMPPEX.SessionTest do
       end)
 
     Server.send(ctx[:server], pdu_data)
-    Timer.sleep(50)
+    assert_receive {:handle_pdu, _}
 
     assert [{:init, _, _}, {:handle_pdu, received_pdu}] = ctx[:callbacks].()
 
     reply_pdu = SMPPEX.Pdu.Factory.bind_transmitter_resp(0) |> Pdu.as_reply_to(received_pdu)
     Session.send_pdu(esme, reply_pdu)
-    Timer.sleep(50)
 
-    assert {:ok, {:pdu, reply_received}, _} =
-             Server.received_data(ctx[:server]) |> SMPPEX.Protocol.parse()
+    assert_receive {:handle_send_pdu_result, _, :ok}
 
-    assert Pdu.sequence_number(reply_received) == 123
+    assert wait_match(fn ->
+             {:ok, {:pdu, reply_received}, _} =
+               Server.received_data(ctx[:server]) |> SMPPEX.Protocol.parse()
+
+             assert Pdu.sequence_number(reply_received) == 123
+           end)
   end
 
   test "stop", ctx do
@@ -126,8 +136,6 @@ defmodule SMPPEX.SessionTest do
         {:terminate, _reason, _lost_pdus}, _st -> :stop
       end)
 
-    Timer.sleep(50)
-
     assert :ok = Session.stop(esme, :oops)
 
     assert [
@@ -135,12 +143,7 @@ defmodule SMPPEX.SessionTest do
              {:terminate, :oops, _lost_pdus}
            ] = ctx[:callbacks].()
 
-    receive do
-      x -> assert {:EXIT, ^esme, :oops} = x
-    after
-      50 ->
-        flunk("Expected exit message")
-    end
+    assert_receive {:EXIT, ^esme, :oops}
 
     refute Process.alive?(esme)
   end
@@ -155,7 +158,8 @@ defmodule SMPPEX.SessionTest do
       end)
 
     Session.cast(esme, ref)
-    Timer.sleep(10)
+
+    assert_receive {:handle_cast, _}
 
     assert [{:init, _, _}, {:handle_cast, ^ref}] = ctx[:callbacks].()
   end
@@ -170,7 +174,8 @@ defmodule SMPPEX.SessionTest do
       end)
 
     GenServer.cast(esme, ref)
-    Timer.sleep(10)
+
+    assert_receive {:handle_cast, _}
 
     assert [{:init, _, _}, {:handle_cast, ^ref}] = ctx[:callbacks].()
   end
@@ -185,12 +190,14 @@ defmodule SMPPEX.SessionTest do
 
     assert :ok == Session.cast(esme, :req)
 
-    Timer.sleep(50)
+    assert_receive {:handle_cast, _}
 
-    assert {:ok, {:pdu, enquire_link_pdu}, _rest_data} =
-             Server.received_data(ctx[:server]) |> SMPPEX.Protocol.parse()
+    assert wait_match(fn ->
+             {:ok, {:pdu, enquire_link_pdu}, _rest_data} =
+               Server.received_data(ctx[:server]) |> SMPPEX.Protocol.parse()
 
-    assert Pdu.command_name(enquire_link_pdu) == :enquire_link
+             assert Pdu.command_name(enquire_link_pdu) == :enquire_link
+           end)
   end
 
   test "terminate with sending pdus", ctx do
@@ -205,12 +212,12 @@ defmodule SMPPEX.SessionTest do
 
     assert :ok == Session.stop(esme)
 
-    Timer.sleep(50)
+    assert wait_match(fn ->
+             {:ok, {:pdu, enquire_link_pdu}, _rest_data} =
+               Server.received_data(ctx[:server]) |> SMPPEX.Protocol.parse()
 
-    assert {:ok, {:pdu, enquire_link_pdu}, _rest_data} =
-             Server.received_data(ctx[:server]) |> SMPPEX.Protocol.parse()
-
-    assert Pdu.command_name(enquire_link_pdu) == :enquire_link
+             assert Pdu.command_name(enquire_link_pdu) == :enquire_link
+           end)
   end
 
   test "terminate with invalid response", ctx do
@@ -224,12 +231,7 @@ defmodule SMPPEX.SessionTest do
 
     assert :ok = Session.stop(esme, :oops)
 
-    receive do
-      x -> assert {:EXIT, ^esme, {:bad_terminate_reply, :bad_resp}} = x
-    after
-      50 ->
-        flunk("Expected exit message")
-    end
+    assert_receive {:EXIT, ^esme, {:bad_terminate_reply, :bad_resp}}
 
     refute Process.alive?(esme)
   end
@@ -246,15 +248,14 @@ defmodule SMPPEX.SessionTest do
 
     Session.cast(esme, :req)
 
-    Timer.sleep(50)
+    assert_receive {:terminate, _, _}
+    assert_receive {:EXIT, ^esme, :ooops}
 
     assert [
              {:init, _, _},
              {:handle_cast, :req},
              {:terminate, :ooops, []}
            ] = ctx[:callbacks].()
-
-    refute Process.alive?(esme)
   end
 
   test "cast with invalid reply", ctx do
@@ -269,12 +270,7 @@ defmodule SMPPEX.SessionTest do
 
     Session.cast(esme, :bar)
 
-    receive do
-      x -> assert {:EXIT, ^esme, {:bad_handle_cast_reply, :foo}} = x
-    after
-      50 ->
-        flunk("Expected exit message")
-    end
+    assert_receive {:EXIT, ^esme, {:bad_handle_cast_reply, :foo}}
 
     refute Process.alive?(esme)
   end
@@ -333,12 +329,12 @@ defmodule SMPPEX.SessionTest do
 
     assert :got_it == Session.call(esme, :req)
 
-    Timer.sleep(50)
+    assert wait_match(fn ->
+             {:ok, {:pdu, enquire_link_pdu}, _rest_data} =
+               Server.received_data(ctx[:server]) |> SMPPEX.Protocol.parse()
 
-    assert {:ok, {:pdu, enquire_link_pdu}, _rest_data} =
-             Server.received_data(ctx[:server]) |> SMPPEX.Protocol.parse()
-
-    assert Pdu.command_name(enquire_link_pdu) == :enquire_link
+             assert Pdu.command_name(enquire_link_pdu) == :enquire_link
+           end)
   end
 
   test "call with delayed reply and stop", ctx do
@@ -351,7 +347,6 @@ defmodule SMPPEX.SessionTest do
 
         {:handle_call, :req, from}, st ->
           spawn(fn ->
-            Timer.sleep(20)
             Session.reply(from, :got_it)
           end)
 
@@ -363,7 +358,7 @@ defmodule SMPPEX.SessionTest do
 
     spawn_link(fn -> Session.call(esme, :req) end)
 
-    Timer.sleep(50)
+    assert_receive {:EXIT, ^esme, :ooops}
 
     assert [
              {:init, _, _},
@@ -386,12 +381,7 @@ defmodule SMPPEX.SessionTest do
 
     spawn(fn -> Session.call(esme, :bar) end)
 
-    receive do
-      x -> assert {:EXIT, ^esme, {:bad_handle_call_reply, :foo}} = x
-    after
-      50 ->
-        flunk("Expected exit message")
-    end
+    assert_receive {:EXIT, ^esme, {:bad_handle_call_reply, :foo}}
 
     refute Process.alive?(esme)
   end
@@ -404,7 +394,8 @@ defmodule SMPPEX.SessionTest do
       end)
 
     Kernel.send(esme, :req)
-    Timer.sleep(50)
+
+    assert_receive {:handle_info, _}
 
     assert [{:init, _, _}, {:handle_info, :req}] = ctx[:callbacks].()
   end
@@ -419,12 +410,12 @@ defmodule SMPPEX.SessionTest do
 
     Kernel.send(esme, :req)
 
-    Timer.sleep(50)
+    assert wait_match(fn ->
+             {:ok, {:pdu, enquire_link_pdu}, _rest_data} =
+               Server.received_data(ctx[:server]) |> SMPPEX.Protocol.parse()
 
-    assert {:ok, {:pdu, enquire_link_pdu}, _rest_data} =
-             Server.received_data(ctx[:server]) |> SMPPEX.Protocol.parse()
-
-    assert Pdu.command_name(enquire_link_pdu) == :enquire_link
+             assert Pdu.command_name(enquire_link_pdu) == :enquire_link
+           end)
   end
 
   test "info with stop", ctx do
@@ -439,7 +430,7 @@ defmodule SMPPEX.SessionTest do
 
     Kernel.send(esme, :req)
 
-    Timer.sleep(50)
+    assert_receive {:EXIT, ^esme, :ooops}
 
     assert [
              {:init, _, _},
@@ -462,19 +453,14 @@ defmodule SMPPEX.SessionTest do
 
     send(esme, :bar)
 
-    receive do
-      x -> assert {:EXIT, ^esme, {:bad_handle_info_reply, :foo}} = x
-    after
-      50 ->
-        flunk("Should have received an exit message")
-    end
+    assert_receive {:EXIT, ^esme, {:bad_handle_info_reply, :foo}}
 
     refute Process.alive?(esme)
   end
 
   test "init", ctx do
     _esme = ctx[:esme].(fn {:init, _socket, _transport}, st -> {:ok, st} end)
-    Timer.sleep(50)
+    assert_receive {:init, _, _}
 
     assert [{:init, _, _}] = ctx[:callbacks].()
   end
@@ -499,7 +485,7 @@ defmodule SMPPEX.SessionTest do
       end)
 
     Server.send(ctx[:server], pdu_data)
-    Timer.sleep(50)
+    assert_receive {:handle_pdu, _}
 
     assert [{:init, _, _}, {:handle_pdu, received_pdu}] = ctx[:callbacks].()
     assert Pdu.mandatory_field(received_pdu, :system_id) == "system_id"
@@ -523,7 +509,7 @@ defmodule SMPPEX.SessionTest do
       end)
 
     Server.send(ctx[:server], pdu_data)
-    Timer.sleep(50)
+    assert_receive {:handle_send_pdu_result, _, :ok}
 
     assert [
              {:init, _, _},
@@ -531,10 +517,12 @@ defmodule SMPPEX.SessionTest do
              {:handle_send_pdu_result, _, _}
            ] = ctx[:callbacks].()
 
-    assert {:ok, {:pdu, reply_pdu}, _rest_data} =
-             Server.received_data(ctx[:server]) |> SMPPEX.Protocol.parse()
+    assert wait_match(fn ->
+             {:ok, {:pdu, reply_pdu}, _rest_data} =
+               Server.received_data(ctx[:server]) |> SMPPEX.Protocol.parse()
 
-    assert Pdu.command_name(reply_pdu) == :bind_transmitter_resp
+             assert Pdu.command_name(reply_pdu) == :bind_transmitter_resp
+           end)
   end
 
   test "handle_pdu with stop", ctx do
@@ -555,15 +543,14 @@ defmodule SMPPEX.SessionTest do
       end)
 
     Server.send(ctx[:server], pdu_data)
-    Timer.sleep(50)
+
+    assert_receive {:EXIT, ^esme, :nopenope}
 
     assert [
              {:init, _, _},
              {:handle_pdu, _},
              {:terminate, :nopenope, []}
            ] = ctx[:callbacks].()
-
-    refute Process.alive?(esme)
   end
 
   test "handle_pdu with invalid reply", ctx do
@@ -585,12 +572,7 @@ defmodule SMPPEX.SessionTest do
 
     Server.send(ctx[:server], pdu_data)
 
-    receive do
-      x -> assert {:EXIT, ^esme, {:bad_handle_pdu_reply, :foo}} = x
-    after
-      50 ->
-        flunk("Should have received an exit message")
-    end
+    assert_receive {:EXIT, ^esme, {:bad_handle_pdu_reply, :foo}}
 
     refute Process.alive?(esme)
   end
@@ -606,12 +588,13 @@ defmodule SMPPEX.SessionTest do
       end)
 
     Session.send_pdu(esme, pdu)
-    Timer.sleep(50)
+    assert_receive {:handle_send_pdu_result, _, :ok}
 
     reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 1}
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
-    Timer.sleep(50)
+
+    assert_receive {:handle_resp, _, _}
 
     assert [
              {:init, _, _},
@@ -633,12 +616,12 @@ defmodule SMPPEX.SessionTest do
       end)
 
     Session.send_pdu(esme, pdu)
-    Timer.sleep(50)
+    assert_receive {:handle_send_pdu_result, _, :ok}
 
     reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 1}
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
-    Timer.sleep(50)
+    assert_receive {:handle_send_pdu_result, _, :ok}
 
     assert [
              {:init, _, _},
@@ -649,12 +632,14 @@ defmodule SMPPEX.SessionTest do
 
     assert Pdu.mandatory_field(received_reply_pdu, :system_id) == "sid"
 
-    assert {:ok, {:pdu, _}, rest_data} =
-             Server.received_data(ctx[:server]) |> SMPPEX.Protocol.parse()
+    assert wait_match(fn ->
+             {:ok, {:pdu, _}, rest_data} =
+               Server.received_data(ctx[:server]) |> SMPPEX.Protocol.parse()
 
-    assert {:ok, {:pdu, enquire_link_pdu}, _rest_data} = SMPPEX.Protocol.parse(rest_data)
+             {:ok, {:pdu, enquire_link_pdu}, _rest_data} = SMPPEX.Protocol.parse(rest_data)
 
-    assert Pdu.command_name(enquire_link_pdu) == :enquire_link
+             assert Pdu.command_name(enquire_link_pdu) == :enquire_link
+           end)
   end
 
   test "handle_resp ok with stop", ctx do
@@ -671,12 +656,13 @@ defmodule SMPPEX.SessionTest do
       end)
 
     Session.send_pdu(esme, pdu)
-    Timer.sleep(50)
+    assert_receive {:handle_send_pdu_result, _, :ok}
 
     reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 1}
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
-    Timer.sleep(50)
+
+    assert_receive {:EXIT, ^esme, :nopenope}
 
     assert [
              {:init, _, _},
@@ -699,21 +685,21 @@ defmodule SMPPEX.SessionTest do
       end)
 
     Session.send_pdu(esme, pdu)
-    Timer.sleep(50)
+    assert_receive {:handle_send_pdu_result, _, :ok}
 
     reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 1}
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
-    Timer.sleep(50)
+    assert_receive {:handle_resp, _, _}
 
     pdu = SMPPEX.Pdu.Factory.submit_sm({"from", 1, 2}, {"to", 1, 2}, "message")
     Session.send_pdu(esme, pdu)
-    Timer.sleep(50)
+    assert_receive {:handle_send_pdu_result, _, :ok}
 
     reply_pdu = %Pdu{SMPPEX.Pdu.Factory.submit_sm_resp(0) | sequence_number: 2}
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
-    Timer.sleep(50)
+    assert_receive {:handle_resp, _, _}
 
     assert [
              {:init, _, _},
@@ -737,12 +723,13 @@ defmodule SMPPEX.SessionTest do
       end)
 
     Session.send_pdu(esme, pdu)
-    Timer.sleep(50)
+    assert_receive {:handle_send_pdu_result, _, :ok}
 
     reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 2}
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
-    Timer.sleep(50)
+
+    sync(esme)
 
     assert [
              {:init, _, _},
@@ -764,19 +751,13 @@ defmodule SMPPEX.SessionTest do
       end)
 
     Session.send_pdu(esme, pdu)
-    Timer.sleep(50)
+    assert_receive {:handle_send_pdu_result, _, :ok}
 
     reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 1}
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
-    Timer.sleep(50)
 
-    receive do
-      x -> assert {:EXIT, ^esme, {:bad_handle_resp_reply, :foo}} = x
-    after
-      50 ->
-        flunk("Expected exit message")
-    end
+    assert_receive {:EXIT, ^esme, {:bad_handle_resp_reply, :foo}}
 
     refute Process.alive?(esme)
   end
@@ -792,15 +773,16 @@ defmodule SMPPEX.SessionTest do
       end)
 
     Session.send_pdu(esme, pdu)
-    time = :erlang.monotonic_time(:millisecond)
-    Timer.sleep(50)
 
-    Kernel.send(esme, {:check_expired_pdus, time + 2050})
+    Klotho.Mock.warp_by(2050)
+
     reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 1}
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
 
-    Timer.sleep(50)
+    Klotho.Mock.warp_by(50)
+
+    sync(esme)
 
     assert [
              {:init, _, _},
@@ -822,15 +804,13 @@ defmodule SMPPEX.SessionTest do
       end)
 
     Session.send_pdu(esme, pdu)
-    time = :erlang.monotonic_time(:millisecond)
-    Timer.sleep(50)
+    Klotho.Mock.warp_by(2050)
 
-    Kernel.send(esme, {:check_expired_pdus, time + 2050})
     reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 1}
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
 
-    Timer.sleep(50)
+    sync(esme)
 
     assert [
              {:init, _, _},
@@ -851,15 +831,17 @@ defmodule SMPPEX.SessionTest do
       end)
 
     Session.send_pdu(esme, pdu)
-    time = :erlang.monotonic_time(:millisecond)
-    Timer.sleep(50)
 
-    Kernel.send(esme, {:check_expired_pdus, time + 2050})
+    assert_receive {:handle_send_pdu_result, _, :ok}
+
+    Klotho.Mock.warp_by(2050)
+
     reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 1}
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
 
-    Timer.sleep(50)
+    assert_receive {:handle_resp_timeout, _}
+    assert_receive {:handle_send_pdu_result, _, :ok}
 
     assert [
              {:init, _, _},
@@ -870,12 +852,14 @@ defmodule SMPPEX.SessionTest do
 
     assert Pdu.mandatory_field(timeout_pdu, :system_id) == "system_id1"
 
-    assert {:ok, {:pdu, _}, rest_data} =
-             Server.received_data(ctx[:server]) |> SMPPEX.Protocol.parse()
+    assert wait_match(fn ->
+             {:ok, {:pdu, _}, rest_data} =
+               Server.received_data(ctx[:server]) |> SMPPEX.Protocol.parse()
 
-    assert {:ok, {:pdu, enquire_link_pdu}, _rest_data} = SMPPEX.Protocol.parse(rest_data)
+             {:ok, {:pdu, enquire_link_pdu}, _rest_data} = SMPPEX.Protocol.parse(rest_data)
 
-    assert Pdu.command_name(enquire_link_pdu) == :enquire_link
+             assert Pdu.command_name(enquire_link_pdu) == :enquire_link
+           end)
   end
 
   test "handle_resp_timeout with stop", ctx do
@@ -892,12 +876,9 @@ defmodule SMPPEX.SessionTest do
       end)
 
     Session.send_pdu(esme, pdu)
-    time = :erlang.monotonic_time(:millisecond)
-    Timer.sleep(50)
 
-    Kernel.send(esme, {:check_expired_pdus, time + 2050})
-
-    Timer.sleep(50)
+    Klotho.Mock.warp_by(2050)
+    sync(esme)
 
     assert [
              {:init, _, _},
@@ -916,26 +897,26 @@ defmodule SMPPEX.SessionTest do
 
     esme =
       ctx[:esme].(fn
-        {:init, _socket, _transport}, st -> {:ok, st}
-        {:handle_send_pdu_result, _pdu, _result}, st -> st
-        {:handle_resp_timeout, _pdu}, _st -> :foo
-        {:terminate, _, _}, _ -> :stop
+        {:init, _socket, _transport}, st ->
+          {:ok, st}
+
+        {:handle_send_pdu_result, _pdu, _result}, st ->
+          st
+
+        {:handle_resp_timeout, _pdu}, _st ->
+          :foo
+
+        {:terminate, _, _}, _ ->
+          :stop
       end)
 
     Session.send_pdu(esme, pdu)
-    time = :erlang.monotonic_time(:millisecond)
-    Timer.sleep(50)
 
-    Kernel.send(esme, {:check_expired_pdus, time + 2050})
+    assert_receive {:handle_send_pdu_result, _, :ok}
 
-    receive do
-      x -> assert {:EXIT, ^esme, {:bad_handle_resp_timeout_reply, :foo}} = x
-    after
-      50 ->
-        flunk("Expected exit message")
-    end
+    Klotho.Mock.warp_by(2050)
 
-    refute Process.alive?(esme)
+    assert_receive {:EXIT, ^esme, {:bad_handle_resp_timeout_reply, :foo}}
   end
 
   test "handle_send_pdu_result", ctx do
@@ -948,7 +929,7 @@ defmodule SMPPEX.SessionTest do
       end)
 
     Session.send_pdu(esme, pdu)
-    Timer.sleep(50)
+    assert_receive {:handle_send_pdu_result, _, _}
 
     assert [
              {:init, _, _},
@@ -985,7 +966,7 @@ defmodule SMPPEX.SessionTest do
         {:handle_unparsed_pdu, _pdu, _error}, st -> {:ok, st}
       end)
 
-    Timer.sleep(50)
+    assert_receive {:handle_unparsed_pdu, _, _}
 
     assert [
              {:init, _, _},
@@ -1023,12 +1004,12 @@ defmodule SMPPEX.SessionTest do
       0xCC
     >>)
 
-    Timer.sleep(50)
+    assert wait_match(fn ->
+             {:ok, {:pdu, reply_pdu}, _rest_data} =
+               Server.received_data(ctx[:server]) |> SMPPEX.Protocol.parse()
 
-    assert {:ok, {:pdu, reply_pdu}, _rest_data} =
-             Server.received_data(ctx[:server]) |> SMPPEX.Protocol.parse()
-
-    assert Pdu.command_name(reply_pdu) == :enquire_link
+             assert Pdu.command_name(reply_pdu) == :enquire_link
+           end)
   end
 
   test "handle_unparsed_pdu with ok and stop", ctx do
@@ -1038,7 +1019,7 @@ defmodule SMPPEX.SessionTest do
       ctx[:esme].(fn
         {:init, _socket, _transport}, st -> {:ok, st}
         {:handle_unparsed_pdu, _pdu, _error}, st -> {:stop, :nopenope, st}
-        {:terminate, _pdu, _los_pdus}, _st -> :stop
+        {:terminate, _pdu, _lost_pdus}, _st -> :stop
       end)
 
     Server.send(ctx[:server], <<
@@ -1063,7 +1044,7 @@ defmodule SMPPEX.SessionTest do
       0xCC
     >>)
 
-    Timer.sleep(50)
+    assert_receive {:EXIT, ^esme, :nopenope}
 
     assert [
              {:init, _, _},
@@ -1081,7 +1062,7 @@ defmodule SMPPEX.SessionTest do
       ctx[:esme].(fn
         {:init, _socket, _transport}, st -> {:ok, st}
         {:handle_unparsed_pdu, _pdu, _error}, _st -> :foo
-        {:terminate, _pdu, _los_pdus}, _st -> :stop
+        {:terminate, _pdu, _lost_pdus}, _st -> :stop
       end)
 
     Server.send(ctx[:server], <<
@@ -1106,12 +1087,7 @@ defmodule SMPPEX.SessionTest do
       0xCC
     >>)
 
-    receive do
-      x -> assert {:EXIT, ^esme, {:bad_handle_unparsed_pdu_reply, :foo}} = x
-    after
-      50 ->
-        flunk("No exit received")
-    end
+    assert_receive {:EXIT, ^esme, {:bad_handle_unparsed_pdu_reply, :foo}}
 
     refute Process.alive?(esme)
   end
@@ -1121,62 +1097,81 @@ defmodule SMPPEX.SessionTest do
 
     esme =
       ctx[:esme].(fn
-        {:init, _socket, _transport}, st -> {:ok, st}
-        {:handle_send_pdu_result, _pdu, _result}, st -> st
-        {:handle_resp, _pdu, _original_pdu}, st -> {:ok, st}
+        {:init, _socket, _transport}, st ->
+          {:ok, st}
+
+        {:handle_send_pdu_result, _pdu, _result}, st ->
+          st
+
+        {:handle_resp, _pdu, _original_pdu}, st ->
+          {:ok, st}
       end)
 
     Session.send_pdu(esme, pdu)
-    time = :erlang.monotonic_time(:millisecond)
-    Timer.sleep(50)
+
+    assert_receive {:handle_send_pdu_result, _, :ok}
 
     reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 1}
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
-    Timer.sleep(50)
 
-    Kernel.send(esme, {:tick, time + 1050})
-    Timer.sleep(50)
+    assert_receive {:handle_resp, _, _}
 
-    assert {:ok, {:pdu, _}, rest_data} =
-             Server.received_data(ctx[:server]) |> SMPPEX.Protocol.parse()
+    Klotho.Mock.warp_by(1050)
 
-    assert {:ok, {:pdu, enquire_link}, _} = rest_data |> SMPPEX.Protocol.parse()
-    assert Pdu.command_name(enquire_link) == :enquire_link
+    assert wait_match(fn ->
+             {:ok, {:pdu, _}, rest_data} =
+               Server.received_data(ctx[:server]) |> SMPPEX.Protocol.parse()
+
+             {:ok, {:pdu, enquire_link}, _} = rest_data |> SMPPEX.Protocol.parse()
+             assert Pdu.command_name(enquire_link) == :enquire_link
+           end)
   end
 
   test "enquire_link by timeout and consequent submit_sm", ctx do
+    Process.flag(:trap_exit, true)
+
     pdu = SMPPEX.Pdu.Factory.bind_transmitter("system_id1", "pass1")
 
     esme =
       ctx[:esme].(fn
-        {:init, _socket, _transport}, st -> {:ok, st}
-        {:handle_send_pdu_result, _pdu, _result}, st -> st
-        {:handle_resp, _pdu, _original_pdu}, st -> {:ok, st}
+        {:init, _socket, _transport}, st ->
+          {:ok, st}
+
+        {:handle_send_pdu_result, _pdu, _result}, st ->
+          st
+
+        {:handle_resp, _pdu, _original_pdu}, st ->
+          {:ok, st}
       end)
 
     Session.send_pdu(esme, pdu)
-    time = :erlang.monotonic_time(:millisecond)
-    Timer.sleep(50)
+
+    assert_receive {:handle_send_pdu_result, _, :ok}
 
     reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 1}
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
-    Timer.sleep(50)
 
-    Kernel.send(esme, {:tick, time + 1050})
+    assert_receive {:handle_resp, _, _}
+
+    Klotho.Mock.warp_by(1000)
+
+    # Kernel.send(esme, {:tick, time + 1050})
     pdu = SMPPEX.Pdu.Factory.submit_sm({"from", 1, 2}, {"to", 1, 2}, "message")
     Session.send_pdu(esme, pdu)
 
-    Timer.sleep(50)
+    assert_receive {:handle_send_pdu_result, _, :ok}
 
-    assert {:ok, {:pdu, _}, rest_data0} =
-             Server.received_data(ctx[:server]) |> SMPPEX.Protocol.parse()
+    assert wait_match(fn ->
+             {:ok, {:pdu, _}, rest_data0} =
+               Server.received_data(ctx[:server]) |> SMPPEX.Protocol.parse()
 
-    assert {:ok, {:pdu, enquire_link}, rest_data1} = rest_data0 |> SMPPEX.Protocol.parse()
-    assert {:ok, {:pdu, submit_sm}, _} = rest_data1 |> SMPPEX.Protocol.parse()
+             {:ok, {:pdu, enquire_link}, rest_data1} = rest_data0 |> SMPPEX.Protocol.parse()
+             {:ok, {:pdu, submit_sm}, _} = rest_data1 |> SMPPEX.Protocol.parse()
 
-    assert Pdu.sequence_number(enquire_link) < Pdu.sequence_number(submit_sm)
+             assert Pdu.sequence_number(enquire_link) < Pdu.sequence_number(submit_sm)
+           end)
   end
 
   test "enquire_link cancel by peer action", ctx do
@@ -1190,29 +1185,25 @@ defmodule SMPPEX.SessionTest do
       end)
 
     Session.send_pdu(esme, pdu)
-    time = :erlang.monotonic_time(:millisecond)
-    Timer.sleep(50)
+    assert_receive {:handle_send_pdu_result, _, :ok}
 
     reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 1}
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
-    Timer.sleep(50)
+    assert_receive {:handle_resp, _, _}
 
-    Kernel.send(esme, {:tick, time + 950})
-    Timer.sleep(50)
+    Klotho.Mock.warp_by(950)
 
     action_pdu = %Pdu{SMPPEX.Pdu.Factory.enquire_link() | sequence_number: 1}
     {:ok, action_pdu_data} = SMPPEX.Protocol.build(action_pdu)
     Server.send(ctx[:server], action_pdu_data)
-    Timer.sleep(50)
 
-    Kernel.send(esme, {:tick, time + 1050})
-    Timer.sleep(50)
+    assert wait_match(fn ->
+             {:ok, {:pdu, _bind_pdu}, rest} =
+               Server.received_data(ctx[:server]) |> SMPPEX.Protocol.parse()
 
-    assert {:ok, {:pdu, _bind_pdu}, rest} =
-             Server.received_data(ctx[:server]) |> SMPPEX.Protocol.parse()
-
-    assert {:ok, {:pdu, _enquire_link_resp}, <<>>} = rest |> SMPPEX.Protocol.parse()
+             {:ok, {:pdu, _enquire_link_resp}, <<>>} = rest |> SMPPEX.Protocol.parse()
+           end)
   end
 
   test "enquire_link timeout cancel by peer action", ctx do
@@ -1226,28 +1217,26 @@ defmodule SMPPEX.SessionTest do
       end)
 
     Session.send_pdu(esme, pdu)
-    time = :erlang.monotonic_time(:millisecond)
-    Timer.sleep(50)
+    assert_receive {:handle_send_pdu_result, _, :ok}
 
     reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 1}
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
-    Timer.sleep(50)
 
-    Kernel.send(esme, {:tick, time + 1050})
-    Timer.sleep(50)
+    assert_receive {:handle_resp, _, _}
+
+    Klotho.Mock.warp_by(1050)
 
     action_pdu = %Pdu{SMPPEX.Pdu.Factory.enquire_link() | sequence_number: 1}
     {:ok, action_pdu_data} = SMPPEX.Protocol.build(action_pdu)
     Server.send(ctx[:server], action_pdu_data)
-    Timer.sleep(50)
 
-    Kernel.send(esme, {:tick, time + 2100})
-    Timer.sleep(50)
+    sync(esme)
+
+    Klotho.Mock.warp_by(1050)
 
     assert [
              {:init, _, _},
-             # bind_transmitter sent
              {:handle_send_pdu_result, _, :ok},
              {:handle_resp, _, _}
            ] = ctx[:callbacks].()
@@ -1260,36 +1249,46 @@ defmodule SMPPEX.SessionTest do
 
     esme =
       ctx[:esme].(fn
-        {:init, _socket, _transport}, st -> {:ok, st}
-        {:handle_send_pdu_result, _pdu, _result}, st -> st
-        {:handle_resp, _pdu, _original_pdu}, st -> {:ok, st}
-        {:handle_timeout, reason}, _st -> reason
-        {:terminate, _reason, _los_pdus}, _st -> :stop
+        {:init, _socket, _transport}, st ->
+          {:ok, st}
+
+        {:handle_send_pdu_result, _pdu, _result}, st ->
+          st
+
+        {:handle_resp, _pdu, _original_pdu}, st ->
+          {:ok, st}
+
+        {:handle_timeout, reason}, _st ->
+          reason
+
+        {:terminate, _reason, _lost_pdus}, _st ->
+          :stop
       end)
 
     Session.send_pdu(esme, pdu)
-    time = :erlang.monotonic_time(:millisecond)
-    Timer.sleep(50)
+    assert_receive {:handle_send_pdu_result, _, :ok}
 
     reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 1}
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
-    Timer.sleep(50)
 
-    Kernel.send(esme, {:tick, time + 1050})
-    Kernel.send(esme, {:tick, time + 2050})
-    Timer.sleep(50)
+    assert_receive {:handle_resp, _, _}
+
+    Klotho.Mock.warp_by(1050)
+
+    sync(esme)
+
+    Klotho.Mock.warp_by(1000)
+
+    assert_receive {:terminate, _, _}
 
     assert [
              {:init, _, _},
-             # bind_transmitter sent
              {:handle_send_pdu_result, _, :ok},
              {:handle_resp, _, _},
              {:handle_timeout, :enquire_link_timer},
-             {:terminate, :enquire_link_timer, _los_pdus}
+             {:terminate, :enquire_link_timer, _lost_pdus}
            ] = ctx[:callbacks].()
-
-    refute Process.alive?(esme)
   end
 
   test "stop by inactivity timeout", ctx do
@@ -1299,88 +1298,104 @@ defmodule SMPPEX.SessionTest do
 
     esme =
       ctx[:esme].(fn
-        {:init, _socket, _transport}, st -> {:ok, st}
-        {:handle_send_pdu_result, _pdu, _result}, st -> st
-        {:handle_resp, _pdu, _original_pdu}, st -> {:ok, st}
-        {:handle_timeout, reason}, _st -> reason
-        {:terminate, _reason, _los_pdus}, _st -> :stop
+        {:init, _socket, _transport}, st ->
+          {:ok, st}
+
+        {:handle_send_pdu_result, _pdu, _result}, st ->
+          st
+
+        {:handle_resp, _pdu, _original_pdu}, st ->
+          {:ok, st}
+
+        {:handle_timeout, reason}, _st ->
+          reason
+
+        {:terminate, _reason, _lost_pdus}, _st ->
+          :stop
       end)
 
     Session.send_pdu(esme, pdu)
-    time = :erlang.monotonic_time(:millisecond)
-    Timer.sleep(50)
+    assert_receive {:handle_send_pdu_result, _, :ok}
 
     reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 1}
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
-    Timer.sleep(50)
 
-    Kernel.send(esme, {:tick, time + 10_050})
-    Timer.sleep(50)
+    assert_receive {:handle_resp, _, _}
+
+    Klotho.Mock.warp_by(10_050)
+
+    assert_receive {:terminate, _, _}
 
     assert [
              {:init, _, _},
-             # bind_transmitter sent
              {:handle_send_pdu_result, _, :ok},
              {:handle_resp, _, _},
              {:handle_timeout, :inactivity_timer},
              {:terminate, :inactivity_timer, []}
            ] = ctx[:callbacks].()
-
-    refute Process.alive?(esme)
   end
 
   test "stop by session_init_time", ctx do
     Process.flag(:trap_exit, true)
 
-    esme =
+    _esme =
       ctx[:esme_with_opts].(
         fn
-          {:init, _socket, _transport}, st -> {:ok, st}
-          {:handle_timeout, reason}, _st -> reason
-          {:terminate, _reason, _los_pdus}, _st -> :stop
+          {:init, _socket, _transport}, st ->
+            {:ok, st}
+
+          {:handle_timeout, reason}, _st ->
+            reason
+
+          {:terminate, _reason, _lost_pdus}, _st ->
+            :stop
         end,
         session_init_limit: 1000
       )
 
-    time = :erlang.monotonic_time(:millisecond)
+    Klotho.Mock.warp_by(1050)
 
-    Kernel.send(esme, {:tick, time + 1050})
-    Timer.sleep(50)
+    assert_receive {:terminate, :session_init_timer, []}
 
     assert [
              {:init, _, _},
              {:handle_timeout, :session_init_timer},
              {:terminate, :session_init_timer, []}
            ] = ctx[:callbacks].()
-
-    refute Process.alive?(esme)
   end
 
   test "stop by session_init_time cancel: esme", ctx do
     esme =
       ctx[:esme_with_opts].(
         fn
-          {:init, _socket, _transport}, st -> {:ok, st}
-          {:handle_send_pdu_result, _pdu, _result}, st -> st
-          {:handle_resp, _pdu, _original_pdu}, st -> {:ok, st}
-          {:terminate, _reason, _los_pdus}, _st -> :stop
+          {:init, _socket, _transport}, st ->
+            {:ok, st}
+
+          {:handle_send_pdu_result, _pdu, _result}, st ->
+            st
+
+          {:handle_resp, _pdu, _original_pdu}, st ->
+            {:ok, st}
+
+          {:terminate, _reason, _lost_pdus}, _st ->
+            :stop
         end,
         session_init_limit: 1000
       )
 
-    time = :erlang.monotonic_time(:millisecond)
-
     pdu = SMPPEX.Pdu.Factory.bind_transmitter("system_id1", "pass1")
     Session.send_pdu(esme, pdu)
+
+    assert_receive {:handle_send_pdu_result, _, :ok}
 
     reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 1}
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
-    Timer.sleep(50)
 
-    Kernel.send(esme, {:tick, time + 1050})
-    Timer.sleep(50)
+    assert_receive {:handle_resp, _, _}
+
+    Klotho.Mock.warp_by(1050)
 
     assert [
              {:init, _, _},
@@ -1395,19 +1410,21 @@ defmodule SMPPEX.SessionTest do
     esme =
       ctx[:esme_with_opts].(
         fn
-          {:init, _socket, _transport}, st -> {:ok, st}
-          {:handle_send_pdu_result, _pdu, _result}, st -> st
+          {:init, _socket, _transport}, st ->
+            {:ok, st}
+
+          {:handle_send_pdu_result, _pdu, _result}, st ->
+            st
         end,
         session_init_limit: 1000
       )
 
-    time = :erlang.monotonic_time(:millisecond)
-
     pdu = SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid")
     Session.send_pdu(esme, pdu)
 
-    Kernel.send(esme, {:tick, time + 1050})
-    Timer.sleep(50)
+    assert_receive {:handle_send_pdu_result, _, :ok}
+
+    Klotho.Mock.warp_by(1050)
 
     assert [
              {:init, _, _},
@@ -1426,13 +1443,14 @@ defmodule SMPPEX.SessionTest do
       ctx[:esme].(fn
         {:init, _socket, _transport}, st -> {:ok, st}
         {:handle_send_pdu_result, _pdu, _result}, st -> st
-        {:terminate, _reason, _los_pdus}, _st -> :stop
+        {:terminate, _reason, _lost_pdus}, _st -> :stop
       end)
 
     Session.send_pdu(esme, pdu)
-    Timer.sleep(50)
+    assert_receive {:handle_send_pdu_result, _, :ok}
+
     Process.exit(esme, :oops)
-    Timer.sleep(50)
+    assert_receive {:EXIT, ^esme, :oops}
 
     assert [
              {:init, _, _},
@@ -1443,19 +1461,6 @@ defmodule SMPPEX.SessionTest do
     refute Process.alive?(esme)
   end
 
-  test "timeout event", ctx do
-    esme = ctx[:esme].(fn {:init, _socket, _transport}, st -> {:ok, st} end)
-
-    Kernel.send(esme, {:timeout, make_ref(), :emit_tick})
-    Timer.sleep(50)
-
-    assert [
-             {:init, _, _}
-           ] = ctx[:callbacks].()
-
-    assert Process.alive?(esme)
-  end
-
   test "code_change ok", ctx do
     esme =
       ctx[:esme].(fn
@@ -1463,9 +1468,9 @@ defmodule SMPPEX.SessionTest do
         {:code_change, _old_vsn, _extra}, st -> {:ok, st}
       end)
 
-    Sys.suspend(esme)
-    Sys.change_code(esme, Support.Session, '0.0.1', :some_extra)
-    Sys.resume(esme)
+    :sys.suspend(esme)
+    :sys.change_code(esme, Support.Session, '0.0.1', :some_extra)
+    :sys.resume(esme)
 
     assert [
              {:init, _, _},
@@ -1480,9 +1485,9 @@ defmodule SMPPEX.SessionTest do
         {:code_change, _old_vsn, _extra}, _st -> {:error, :oops}
       end)
 
-    Sys.suspend(esme)
-    Sys.change_code(esme, Support.Session, '0.0.1', :some_extra)
-    Sys.resume(esme)
+    :sys.suspend(esme)
+    :sys.change_code(esme, Support.Session, '0.0.1', :some_extra)
+    :sys.resume(esme)
 
     assert [
              {:init, _, _},
@@ -1493,16 +1498,16 @@ defmodule SMPPEX.SessionTest do
   test "socket closed", ctx do
     Process.flag(:trap_exit, true)
 
-    _esme =
+    esme =
       ctx[:esme].(fn
         {:init, _socket, _transport}, st -> {:ok, st}
         {:handle_socket_closed}, st -> {:ooops, st}
-        {:terminate, _reason, _los_pdus}, _st -> :stop
+        {:terminate, _reason, _lost_pdus}, _st -> :stop
       end)
 
     Server.stop(ctx[:server])
 
-    Timer.sleep(50)
+    assert_receive {:EXIT, ^esme, :ooops}
 
     assert [
              {:init, _, _},
@@ -1518,13 +1523,13 @@ defmodule SMPPEX.SessionTest do
       ctx[:esme].(fn
         {:init, _socket, _transport}, st -> {:ok, st}
         {:handle_socket_error, :wow_such_socket_error}, st -> {:ooops, st}
-        {:terminate, _reason, _los_pdus}, _st -> :stop
+        {:terminate, _reason, _lost_pdus}, _st -> :stop
       end)
 
     {_ok, _closed, error, _passive} = Support.Session.socket_messages()
     Kernel.send(esme, {error, :socket, :wow_such_socket_error})
 
-    Timer.sleep(50)
+    assert_receive {:EXIT, ^esme, :ooops}
 
     assert [
              {:init, _, _},

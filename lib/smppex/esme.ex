@@ -43,7 +43,9 @@ defmodule SMPPEX.ESME do
         ) :: GenServer.on_start()
 
   @doc """
-  Starts an `SMPPEX.Session` implementation as an ESME entitiy, i.e. makes a transport connection to `host`:`port` and starts an `SMPPEX.Session` to handle the connection with the passed module.
+  Starts an `SMPPEX.Session` implementation as an ESME entitiy,
+  i.e. makes a transport connection to `host`:`port` and starts an `SMPPEX.Session`
+  to handle the connection with the passed module.
 
   The function does not return until ESME successfully connects to the specified
   `host` and `port` and initializes or fails.
@@ -52,21 +54,25 @@ defmodule SMPPEX.ESME do
   `opts` is a keyword list of different options:
   * `:transport` is Ranch transport used for TCP connection: either `:ranch_tcp` (the default) or
   `:ranch_ssl`;
-  * `:session_module` is a module to use as an alternative to `SMPPEX.Session` for handling sessions (if needed). For example, `SMPPEX.TelemetrySession`.
+  * `:session_module` is a module to use as an alternative to `SMPPEX.Session`
+  for handling sessions (if needed). For example, `SMPPEX.TelemetrySession`.
   * `:timeout` is timeout for transport connect. The default is #{@default_timeout} ms;
   * `:esme_opts` is a keyword list of ESME options:
-      - `:timer_resolution` is interval of internal `ticks` on which time related events happen, like checking timeouts
-      for pdus, checking SMPP timers, etc. The default is #{inspect(Defaults.timer_resolution())} ms;
       - `:enquire_link_limit` is value for enquire_link SMPP timer, i.e. the interval of SMPP session inactivity after which
       enquire_link PDU is send to "ping" the connetion. The default value is #{inspect(Defaults.enquire_link_limit())} ms;
       - `:enquire_link_resp_limit` is the maximum time for which ESME waits for enquire_link PDU response. If the
       response is not received within this interval of time and no activity from the peer occurs, the session is then considered
       dead and the ESME stops. The default value is #{inspect(Defaults.enquire_link_resp_limit())} ms;
       - `:inactivity_limit` is the maximum time for which the peer is allowed not to send PDUs (which are not response PDUs).
-      If no such PDUs are received within this interval of time, ESME stops. The default is #{inspect(Defaults.inactivity_limit())} ms;
+      If no such PDUs are received within this interval of time, ESME stops.
+      The default is #{inspect(Defaults.inactivity_limit())} ms;
       - `:response_limit` is the maximum time to wait for a response for a previously sent PDU. If the response is
       not received within this interval, `handle_resp_timeout` callback is triggered for the original pdu. If the response
       is received later, it is discarded. The default value is #{inspect(Defaults.response_limit())} ms.
+      - `:response_limit_resolution` is the maximum time after reaching `response_limit` for which a PDU without
+      a response is not collected. Setting to `0` will make PDUs without responses to be collected
+      immediately after `response_limit` ms. Setting to greater values improve performance since
+      such PDUs are collected in batches. The default value is #{inspect(Defaults.response_limit_resolution())} ms.
       - `:session_init_limit` is the maximum time for the session to be unbound.
       If no bind request succeed within this interval of time, the session stops.
       The default value is #{inspect(Defaults.session_init_limit())} ms;

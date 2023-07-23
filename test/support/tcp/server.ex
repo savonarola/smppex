@@ -1,8 +1,6 @@
 defmodule Support.TCP.Server do
   @moduledoc false
 
-  alias :gen_tcp, as: GenTCP
-  alias :timer, as: Timer
   alias Support.TCP.Server
 
   defstruct [
@@ -16,7 +14,14 @@ defmodule Support.TCP.Server do
 
     {:ok, received_data_pid} = Agent.start_link(fn -> %{data: <<>>, messages: []} end)
 
-    server_pid = spawn_link(fn -> listen(port, received_data_pid) end)
+    pid = self()
+    ref = make_ref()
+
+    server_pid = spawn_link(fn -> listen(port, received_data_pid, {pid, ref}) end)
+
+    receive do
+      ^ref -> :ok
+    end
 
     %Server{server_pid: server_pid, received_data_pid: received_data_pid, port: port}
   end
@@ -42,10 +47,11 @@ defmodule Support.TCP.Server do
     Agent.get(server.received_data_pid, fn received_data -> received_data.data end)
   end
 
-  defp listen(port, received_data_pid) do
-    {:ok, listen_sock} = GenTCP.listen(port, [:binary, {:active, true}])
-    {:ok, sock} = GenTCP.accept(listen_sock)
-    :ok = GenTCP.close(listen_sock)
+  defp listen(port, received_data_pid, {starter_pid, ref}) do
+    {:ok, listen_sock} = :gen_tcp.listen(port, [:binary, {:active, true}])
+    Kernel.send(starter_pid, ref)
+    {:ok, sock} = :gen_tcp.accept(listen_sock)
+    :ok = :gen_tcp.close(listen_sock)
     loop(received_data_pid, sock)
     wait_for_shutdown()
   end
@@ -64,28 +70,28 @@ defmodule Support.TCP.Server do
           %{received_data | messages: [message | received_data.messages]}
         end)
 
-        GenTCP.close(sock)
+        :gen_tcp.close(sock)
 
       {:tcp_error, ^sock, _reason} = message ->
         Agent.update(received_data_pid, fn received_data ->
           %{received_data | messages: [message | received_data.messages]}
         end)
 
-        GenTCP.close(sock)
+        :gen_tcp.close(sock)
 
       {:tcp_send, data} ->
-        GenTCP.send(sock, data)
+        :gen_tcp.send(sock, data)
         loop(received_data_pid, sock)
 
       :tcp_close ->
-        GenTCP.close(sock)
+        :gen_tcp.close(sock)
     after
-      1_000 ->
-        GenTCP.close(sock)
+      2_000 ->
+        :gen_tcp.close(sock)
     end
   end
 
   defp wait_for_shutdown do
-    Timer.sleep(1_000)
+    :timer.sleep(2_000)
   end
 end

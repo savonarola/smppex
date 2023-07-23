@@ -28,7 +28,7 @@ defmodule Smppex.Mixfile do
   end
 
   def application do
-    [applications: [:logger, :ranch]]
+    [extra_applications: [:logger]]
   end
 
   defp deps do
@@ -38,7 +38,9 @@ defmodule Smppex.Mixfile do
       {:earmark, "~> 1.4", only: :dev},
       {:ex_doc, "~> 0.23", only: :dev},
       {:credo, "~> 1.5", only: [:dev, :test], runtime: false},
-      {:ranch, "~> 2.0"}
+      {:klotho, "~> 0.1", only: [:dev, :test]},
+      {:ranch, "~> 2.0"},
+      {:ex2ms, "~> 1.0"}
     ]
   end
 

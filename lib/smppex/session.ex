@@ -17,8 +17,6 @@ defmodule SMPPEX.Session do
   In this case all callbacks have reasonable defaults.
   """
 
-  alias :erlang, as: Erlang
-
   alias __MODULE__, as: Session
   alias SMPPEX.Pdu
   alias SMPPEX.PduStorage
@@ -40,10 +38,7 @@ defmodule SMPPEX.Session do
     :auto_pdu_handler,
     :response_limit,
     # increment before use
-    :sequence_number,
-    :time,
-    :timer_resolution,
-    :tick_timer_ref
+    :sequence_number
   ]
 
   @default_call_timeout Defaults.default_call_timeout()
@@ -367,11 +362,6 @@ defmodule SMPPEX.Session do
   def init(socket, transport, [{module, args}, session_opts]) do
     case module.init(socket, transport, args) do
       {:ok, state} ->
-        timer_resolution =
-          Keyword.get(session_opts, :timer_resolution, Defaults.timer_resolution())
-
-        timer_ref = Erlang.start_timer(timer_resolution, self(), :emit_tick)
-
         enquire_link_limit =
           Keyword.get(session_opts, :enquire_link_limit, Defaults.enquire_link_limit())
 
@@ -384,21 +374,27 @@ defmodule SMPPEX.Session do
         session_init_limit =
           Keyword.get(session_opts, :session_init_limit, Defaults.session_init_limit())
 
-        time = :erlang.monotonic_time(:millisecond)
-
         timers =
           SMPPTimers.new(
-            time,
             session_init_limit,
             enquire_link_limit,
             enquire_link_resp_limit,
             inactivity_limit
           )
 
-        pdu_storage = PduStorage.new()
         response_limit = Keyword.get(session_opts, :response_limit, Defaults.response_limit())
 
-        auto_pdu_handler = AutoPduHandler.new()
+        response_limit_resolution =
+          Keyword.get(
+            session_opts,
+            :response_limit_resolution,
+            Defaults.response_limit_resolution()
+          )
+
+        pdu_storage = PduStorage.new(:custom_pdus, response_limit, response_limit_resolution)
+        auto_pdu_storage = PduStorage.new(:auto_pdus, response_limit, response_limit_resolution)
+
+        auto_pdu_handler = AutoPduHandler.new(auto_pdu_storage)
 
         sequence_number = Keyword.get(session_opts, :sequence_number, 0)
 
@@ -410,10 +406,7 @@ defmodule SMPPEX.Session do
            pdus: pdu_storage,
            auto_pdu_handler: auto_pdu_handler,
            response_limit: response_limit,
-           sequence_number: sequence_number,
-           time: time,
-           timer_resolution: timer_resolution,
-           tick_timer_ref: timer_ref
+           sequence_number: sequence_number
          }}
 
       {:stop, _} = stop ->
@@ -430,12 +423,15 @@ defmodule SMPPEX.Session do
   def handle_pdu({:pdu, pdu}, st) do
     new_st = update_timers_with_incoming_pdu(pdu, st)
 
-    case AutoPduHandler.handle_pdu(new_st.auto_pdu_handler, pdu, new_st.sequence_number) do
-      :proceed ->
-        handle_pdu_by_callback_module(pdu, new_st)
+    case AutoPduHandler.handle_pdu(new_st.auto_pdu_handler, pdu) do
+      {new_auto_pdu_handler, :proceed} ->
+        handle_pdu_by_callback_module(pdu, %Session{
+          new_st
+          | auto_pdu_handler: new_auto_pdu_handler
+        })
 
-      {:skip, pdus, new_sequence_number} ->
-        {:ok, pdus, %Session{new_st | sequence_number: new_sequence_number}}
+      {new_auto_pdu_handler, :skip, pdus} ->
+        {:ok, pdus, %Session{new_st | auto_pdu_handler: new_auto_pdu_handler}}
     end
   end
 
@@ -448,14 +444,14 @@ defmodule SMPPEX.Session do
     end
 
     case AutoPduHandler.handle_send_pdu_result(new_st.auto_pdu_handler, pdu) do
-      :proceed ->
+      {new_auto_pdu_handler, :proceed} ->
         new_module_state =
           st.module.handle_send_pdu_result(pdu, send_pdu_result, new_st.module_state)
 
-        %Session{new_st | module_state: new_module_state}
+        %Session{new_st | auto_pdu_handler: new_auto_pdu_handler, module_state: new_module_state}
 
-      :skip ->
-        new_st
+      {new_auto_pdu_handler, :skip} ->
+        %Session{new_st | auto_pdu_handler: new_auto_pdu_handler}
     end
   end
 
@@ -490,25 +486,12 @@ defmodule SMPPEX.Session do
   end
 
   @impl TransportSession
-  def handle_info({:timeout, _timer_ref, :emit_tick}, st) do
-    new_tick_timer_ref = Erlang.start_timer(st.timer_resolution, self(), :emit_tick)
-    Erlang.cancel_timer(st.tick_timer_ref)
-    Kernel.send(self(), {:tick, :erlang.monotonic_time(:millisecond)})
-    {:noreply, [], %Session{st | tick_timer_ref: new_tick_timer_ref}}
+  def handle_info({:smpp_timer, _} = timer_event, st) do
+    check_timers(timer_event, st)
   end
 
-  def handle_info({:tick, time}, st) do
-    Kernel.send(self(), {:check_timers, time})
-    Kernel.send(self(), {:check_expired_pdus, time})
-    {:noreply, [], %Session{st | time: time}}
-  end
-
-  def handle_info({:check_timers, time}, st) do
-    check_timers(time, st)
-  end
-
-  def handle_info({:check_expired_pdus, time}, st) do
-    check_expired_pdus(time, st)
+  def handle_info({:expire_pdus, pdu_storage_id}, st) do
+    check_expired_pdus(pdu_storage_id, st)
   end
 
   def handle_info(request, st) do
@@ -530,14 +513,15 @@ defmodule SMPPEX.Session do
 
   @impl TransportSession
   def terminate(reason, st) do
-    lost_pdus = PduStorage.fetch_all(st.pdus)
+    {new_pdu_storage, lost_pdus} = PduStorage.fetch_all(st.pdus)
+    new_st = %Session{st | pdus: new_pdu_storage}
 
-    case st.module.terminate(reason, lost_pdus, st.module_state) do
+    case new_st.module.terminate(reason, lost_pdus, new_st.module_state) do
       :stop ->
-        {[], st}
+        {[], new_st}
 
       {:stop, pdus, new_module_state} when is_list(pdus) ->
-        {pdus, %Session{st | module_state: new_module_state}}
+        {pdus, %Session{new_st | module_state: new_module_state}}
 
       other ->
         exit({:bad_terminate_reply, other})
@@ -577,15 +561,18 @@ defmodule SMPPEX.Session do
     sequence_number = Pdu.sequence_number(pdu)
 
     case PduStorage.fetch(st.pdus, sequence_number) do
-      [] ->
+      {new_pdu_storage, []} ->
+        new_st = %Session{st | pdus: new_pdu_storage}
+
         Logger.info(
           "Session #{inspect(self())}, resp for unknown pdu(sequence_number: #{sequence_number}), dropping"
         )
 
-        {{:ok, st.module_state}, st}
+        {{:ok, new_st.module_state}, new_st}
 
-      [original_pdu] ->
-        {st.module.handle_resp(pdu, original_pdu, st.module_state), st}
+      {new_pdu_storage, [original_pdu]} ->
+        new_st = %Session{st | pdus: new_pdu_storage}
+        {new_st.module.handle_resp(pdu, original_pdu, new_st.module_state), new_st}
     end
   end
 
@@ -594,16 +581,16 @@ defmodule SMPPEX.Session do
       cond do
         Pdu.bind_resp?(pdu) && Pdu.success_resp?(pdu) ->
           st.timers
-          |> SMPPTimers.handle_bind(st.time)
-          |> SMPPTimers.handle_peer_transaction(st.time)
+          |> SMPPTimers.handle_bind()
+          |> SMPPTimers.handle_peer_transaction()
 
         Pdu.resp?(pdu) ->
           st.timers
-          |> SMPPTimers.handle_peer_action(st.time)
+          |> SMPPTimers.handle_peer_action()
 
         true ->
           st.timers
-          |> SMPPTimers.handle_peer_transaction(st.time)
+          |> SMPPTimers.handle_peer_transaction()
       end
 
     %Session{st | timers: new_timers}
@@ -613,7 +600,7 @@ defmodule SMPPEX.Session do
     new_timers =
       if send_pdu_result == :ok and Pdu.bind_resp?(pdu) and Pdu.success_resp?(pdu) do
         st.timers
-        |> SMPPTimers.handle_bind(st.time)
+        |> SMPPTimers.handle_bind()
       else
         st.timers
       end
@@ -621,41 +608,44 @@ defmodule SMPPEX.Session do
     %Session{st | timers: new_timers}
   end
 
-  defp check_expired_pdus(time, st) do
-    AutoPduHandler.drop_expired(st.auto_pdu_handler, time)
+  defp check_expired_pdus(:auto_pdus, st) do
+    :ok = AutoPduHandler.drop_expired(st.auto_pdu_handler)
+    {:noreply, [], st}
+  end
 
-    case PduStorage.fetch_expired(st.pdus, time) do
-      [] ->
-        {:noreply, [], st}
+  defp check_expired_pdus(:custom_pdus, st) do
+    case PduStorage.fetch_expired(st.pdus) do
+      {new_pdu_storage, []} ->
+        new_st = %Session{st | pdus: new_pdu_storage}
+        {:noreply, [], new_st}
 
-      pdus ->
-        module_reply = st.module.handle_resp_timeout(pdus, st.module_state)
-        process_handle_resp_timeout_reply({module_reply, st})
+      {new_pdu_storage, pdus} ->
+        new_st = %Session{st | pdus: new_pdu_storage}
+        module_reply = st.module.handle_resp_timeout(pdus, new_st.module_state)
+        process_handle_resp_timeout_reply({module_reply, new_st})
     end
   end
 
-  defp check_timers(time, st) do
-    case SMPPTimers.handle_tick(st.timers, time) do
-      {:ok, new_timers} ->
-        new_st = %Session{st | timers: new_timers}
-        {:noreply, [], new_st}
-
+  defp check_timers(timer_event, st) do
+    case SMPPTimers.handle_timer_event(st.timers, timer_event) do
       {:stop, reason} ->
         exit_reason = st.module.handle_timeout(reason, st.module_state)
         {:stop, exit_reason, [], st}
 
       {:enquire_link, new_timers} ->
-        {enquire_link, new_sequence_number} =
+        new_sequence_number = st.sequence_number + 1
+
+        {new_auto_pdu_handler, enquire_link} =
           AutoPduHandler.enquire_link(
             st.auto_pdu_handler,
-            time + st.response_limit,
-            st.sequence_number
+            new_sequence_number
           )
 
         {:noreply, [enquire_link],
          %Session{
            st
            | sequence_number: new_sequence_number,
+             auto_pdu_handler: new_auto_pdu_handler,
              timers: new_timers
          }}
     end
@@ -670,8 +660,8 @@ defmodule SMPPEX.Session do
     else
       sequence_number = st.sequence_number + 1
       new_pdu = %Pdu{pdu | sequence_number: sequence_number}
-      true = PduStorage.store(st.pdus, new_pdu, st.time + st.response_limit)
-      new_st = %Session{st | sequence_number: sequence_number}
+      new_pdu_storage = PduStorage.store(st.pdus, new_pdu)
+      new_st = %Session{st | sequence_number: sequence_number, pdus: new_pdu_storage}
       save_sent_pdus(pdus, new_st, [new_pdu | pdus_to_send])
     end
   end

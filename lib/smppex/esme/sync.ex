@@ -187,7 +187,7 @@ defmodule SMPPEX.ESME.Sync do
   end
 
   @impl SMPPEX.Session
-  def terminate(_reason, _los_pdus, st) do
+  def terminate(_reason, _lost_pdus, st) do
     case st.pdu_waiter do
       nil -> :nop
       from -> reply(from, :stop)
@@ -259,6 +259,7 @@ defmodule SMPPEX.ESME.Sync do
   end
 
   defp call(pid, request, timeout) do
+    ## TODO use alias not to pollute the mailbox with late replies
     ref = make_ref()
     from = {ref, self()}
     :ok = Session.call(pid, {:call, request, from})
