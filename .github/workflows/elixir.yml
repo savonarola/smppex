@@ -2,9 +2,9 @@ name: Elixir CI
 
 on:
   push:
-    branches: [ master, update-ci ]
+    branches: [ main, update-ci ]
   pull_request:
-    branches: [ master ]
+    branches: [ main ]
 
 jobs:
   test:
