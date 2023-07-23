@@ -1,8 +1,6 @@
 defmodule SMPPEX.ESMETest do
   use ExUnit.Case
 
-  alias :gen_tcp, as: GenTCP
-
   alias Support.TCP.Server
   alias Support.Session, as: SupportSession
   alias SMPPEX.ESME
@@ -52,8 +50,8 @@ defmodule SMPPEX.ESMETest do
   test "start_link when MC is down" do
     server = Server.start_link()
     port = Server.port(server)
-    {:ok, sock} = GenTCP.connect('localhost', port, [])
-    :ok = GenTCP.close(sock)
+    {:ok, sock} = :gen_tcp.connect('localhost', port, [])
+    :ok = :gen_tcp.close(sock)
 
     {:ok, pid} = Agent.start_link(fn -> [] end)
     handler = fn {:init, _socket, _transport}, st -> {:ok, st} end

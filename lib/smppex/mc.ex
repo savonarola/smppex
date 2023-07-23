@@ -36,15 +36,13 @@ defmodule SMPPEX.MC do
   Note that each received connection is served with its own process which uses passed callback module (`MyESMESession`) for handling connection events. Each process has his own state initialized by `init` callback receiving `socket`, `transport` and a copy of arguments (`session_arg`).
   """
 
-  alias :ranch, as: Ranch
-
   alias SMPPEX.Session.Defaults
 
   @default_transport :ranch_tcp
   @default_acceptor_count 50
 
   @spec start({module, args :: term}, opts :: Keyword.t()) ::
-          {:ok, listener_ref :: Ranch.ref()}
+          {:ok, listener_ref :: :ranch.ref()}
           | {:error, reason :: term}
 
   @doc """
@@ -60,7 +58,7 @@ defmodule SMPPEX.MC do
     {ref, transport, transport_opts, protocol, protocol_opts} =
       ranch_start_args(mod_with_args, opts)
 
-    start_result = Ranch.start_listener(ref, transport, transport_opts, protocol, protocol_opts)
+    start_result = :ranch.start_listener(ref, transport, transport_opts, protocol, protocol_opts)
 
     case start_result do
       {:error, _} = error -> error
@@ -89,16 +87,16 @@ defmodule SMPPEX.MC do
   * `:session` (required) a `{module, arg}` tuple, where `module` is the callback module
   which should implement `SMPPEX.Session` behaviour, while `arg` is the argument passed
   to the `init` callback each time a new connection is received.
-  * `:transport` is Ranch transport used for TCP connections: either `ranch_tcp` (the default)
+  * `:transport` is :ranch transport used for TCP connections: either `ranch_tcp` (the default)
   or `ranch_ssl`;
-  * `:transport_opts` is a map of Ranch transport options.
+  * `:transport_opts` is a map of :ranch transport options.
   The major key is `socket_opts` which contains a list of important options such as `{:port, port}`.
   The port is set to `0` by default, which means that the listener will accept
   connections on a random free port. For backward compatibility one can pass a list of socket options
-  instead of `transport_opts` map (as in Ranch 1.x).
+  instead of `transport_opts` map (as in :ranch 1.x).
   * `:session_module` is a module to use as an alternative to `SMPPEX.Session`
   for handling sessions (if needed). For example, `SMPPEX.TelemetrySession`.
-  * `:acceptor_count` is the number of Ranch listener acceptors, #{@default_acceptor_count} by default.
+  * `:acceptor_count` is the number of :ranch listener acceptors, #{@default_acceptor_count} by default.
   * `:mc_opts` is a keyword list of MC options:
       - `:session_init_limit` is the maximum time for which a session waits an incoming bind request.
       If no bind request is received within this interval of time, the session stops.
@@ -138,7 +136,7 @@ defmodule SMPPEX.MC do
     {ref, transport, transport_opts, protocol, protocol_opts} =
       ranch_start_args(mod_with_args, opts)
 
-    Ranch.child_spec(ref, transport, transport_opts, protocol, protocol_opts)
+    :ranch.child_spec(ref, transport, transport_opts, protocol, protocol_opts)
   end
 
   defp ranch_start_args({_module, _args} = mod_with_args, opts) do
@@ -172,13 +170,13 @@ defmodule SMPPEX.MC do
     Map.put_new(opts, :num_acceptors, acceptor_count)
   end
 
-  @spec stop(Ranch.ref()) :: :ok
+  @spec stop(:ranch.ref()) :: :ok
 
   @doc """
   Stops MC listener and all its sessions.
   """
 
   def stop(listener) do
-    Ranch.stop_listener(listener)
+    :ranch.stop_listener(listener)
   end
 end

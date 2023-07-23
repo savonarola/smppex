@@ -6,10 +6,6 @@ defmodule SMPPEX.TransportSession do
   use GenServer
   require Logger
 
-  alias :proc_lib, as: ProcLib
-  alias :ranch, as: Ranch
-  alias :gen_server, as: GenServerErl
-
   alias SMPPEX.Protocol, as: SMPP
   alias SMPPEX.Pdu
   alias __MODULE__, as: TransportSession
@@ -70,17 +66,17 @@ defmodule SMPPEX.TransportSession do
               {:ok, state}
               | {:error, reason}
 
-  # Ranch protocol behaviour
+  # :ranch protocol behaviour
 
   def start_link(ref, transport, opts) do
     start_link(:mc, {ref, transport, opts})
   end
 
   def start_link(mode, args) do
-    ProcLib.start_link(__MODULE__, :init_loop, [{mode, args}])
+    :proc_lib.start_link(__MODULE__, :init_loop, [{mode, args}])
   end
 
-  # Manual start, without Ranch
+  # Manual start, without :ranch
 
   def start_esme(socket, transport, opts) do
     ref = make_ref()
@@ -110,8 +106,8 @@ defmodule SMPPEX.TransportSession do
   end
 
   def init_loop({:mc, {ref, transport, opts}}) do
-    :ok = ProcLib.init_ack({:ok, self()})
-    {:ok, socket} = Ranch.handshake(ref)
+    :ok = :proc_lib.init_ack({:ok, self()})
+    {:ok, socket} = :ranch.handshake(ref)
     {module, module_opts} = opts
 
     case module.init(socket, transport, module_opts) do
@@ -140,7 +136,7 @@ defmodule SMPPEX.TransportSession do
 
     case module.init(socket, transport, module_opts) do
       {:ok, module_state} ->
-        :ok = ProcLib.init_ack({:ok, self()})
+        :ok = :proc_lib.init_ack({:ok, self()})
         :ok = accept_grant(ref)
 
         state = %TransportSession{
@@ -157,7 +153,7 @@ defmodule SMPPEX.TransportSession do
         enter_loop(state)
 
       {:stop, reason} ->
-        ProcLib.init_ack({:error, reason})
+        :proc_lib.init_ack({:error, reason})
     end
   end
 
@@ -170,7 +166,7 @@ defmodule SMPPEX.TransportSession do
   defp enter_loop(state) do
     case wait_for_data(state) do
       {:noreply, new_state} ->
-        GenServerErl.enter_loop(__MODULE__, [], new_state)
+        :gen_server.enter_loop(__MODULE__, [], new_state)
 
       {:stop, reason, _state} ->
         Process.exit(self(), reason)

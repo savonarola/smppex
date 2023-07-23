@@ -1,8 +1,6 @@
 defmodule SMPPEX.PduStorage do
   @moduledoc false
 
-  alias :ets, as: ETS
-
   alias SMPPEX.PduStorage
   alias SMPPEX.Pdu
 
@@ -22,8 +20,8 @@ defmodule SMPPEX.PduStorage do
   def new(id, ttl, ttl_threshold) do
     %PduStorage{
       id: id,
-      by_sequence_number: ETS.new(:pdu_storage_by_sequence_number, [:set]),
-      by_expire: ETS.new(:pdu_storage_by_expire, [:ordered_set]),
+      by_sequence_number: :ets.new(:pdu_storage_by_sequence_number, [:set]),
+      by_expire: :ets.new(:pdu_storage_by_expire, [:ordered_set]),
       ttl: ttl,
       ttl_threshold: ttl_threshold
     }
@@ -35,18 +33,18 @@ defmodule SMPPEX.PduStorage do
     sequence_number = Pdu.sequence_number(pdu)
     ref = Pdu.ref(pdu)
     create_time = Klotho.monotonic_time(:millisecond)
-    ETS.insert_new(storage.by_sequence_number, {sequence_number, {create_time, pdu}})
-    ETS.insert_new(storage.by_expire, {{create_time, ref}, sequence_number})
+    :ets.insert_new(storage.by_sequence_number, {sequence_number, {create_time, pdu}})
+    :ets.insert_new(storage.by_expire, {{create_time, ref}, sequence_number})
     schedule_expire(storage, create_time)
   end
 
   @spec fetch(t, non_neg_integer) :: {t, [Pdu.t()]}
 
   def fetch(storage, sequence_number) do
-    case ETS.take(storage.by_sequence_number, sequence_number) do
+    case :ets.take(storage.by_sequence_number, sequence_number) do
       [{^sequence_number, {create_time, pdu}}] ->
         ref = Pdu.ref(pdu)
-        ETS.delete(storage.by_expire, {create_time, ref})
+        :ets.delete(storage.by_expire, {create_time, ref})
         new_storage = reschedule_expire(storage, create_time)
         {new_storage, [pdu]}
 
@@ -66,12 +64,12 @@ defmodule SMPPEX.PduStorage do
           {ref, sequence_number}
       end
 
-    expired = ETS.select(storage.by_expire, expired_ms)
+    expired = :ets.select(storage.by_expire, expired_ms)
 
     pdus =
       for {ref, sequence_number} <- expired, into: [] do
-        [{_sn, {create_time, pdu}}] = ETS.take(storage.by_sequence_number, sequence_number)
-        ETS.delete(storage.by_expire, {create_time, ref})
+        [{_sn, {create_time, pdu}}] = :ets.take(storage.by_sequence_number, sequence_number)
+        :ets.delete(storage.by_expire, {create_time, ref})
         pdu
       end
 
@@ -81,9 +79,9 @@ defmodule SMPPEX.PduStorage do
   @spec fetch_all(t) :: {t, [Pdu.t()]}
 
   def fetch_all(storage) do
-    pdus = for {_sn, {_ex, pdu}} <- ETS.tab2list(storage.by_sequence_number), do: pdu
-    ETS.delete_all_objects(storage.by_sequence_number)
-    ETS.delete_all_objects(storage.by_expire)
+    pdus = for {_sn, {_ex, pdu}} <- :ets.tab2list(storage.by_sequence_number), do: pdu
+    :ets.delete_all_objects(storage.by_sequence_number)
+    :ets.delete_all_objects(storage.by_expire)
     {cancel_expire(storage), pdus}
   end
 
@@ -110,7 +108,7 @@ defmodule SMPPEX.PduStorage do
 
   # This is called when a PDU is fetched from storage.
   defp reschedule_expire(storage, fetched_create_time) do
-    case ETS.first(storage.by_expire) do
+    case :ets.first(storage.by_expire) do
       {create_time, _ref} ->
         # There is still something left in
         if create_time > fetched_create_time or fetched_create_time == nil do

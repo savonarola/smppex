@@ -1,8 +1,6 @@
 defmodule SMPPEX.SessionTest do
   use ExUnit.Case
 
-  alias :sys, as: Sys
-
   alias Support.TCP.Server
   alias SMPPEX.Session
   alias SMPPEX.Pdu
@@ -1470,9 +1468,9 @@ defmodule SMPPEX.SessionTest do
         {:code_change, _old_vsn, _extra}, st -> {:ok, st}
       end)
 
-    Sys.suspend(esme)
-    Sys.change_code(esme, Support.Session, '0.0.1', :some_extra)
-    Sys.resume(esme)
+    :sys.suspend(esme)
+    :sys.change_code(esme, Support.Session, '0.0.1', :some_extra)
+    :sys.resume(esme)
 
     assert [
              {:init, _, _},
@@ -1487,9 +1485,9 @@ defmodule SMPPEX.SessionTest do
         {:code_change, _old_vsn, _extra}, _st -> {:error, :oops}
       end)
 
-    Sys.suspend(esme)
-    Sys.change_code(esme, Support.Session, '0.0.1', :some_extra)
-    Sys.resume(esme)
+    :sys.suspend(esme)
+    :sys.change_code(esme, Support.Session, '0.0.1', :some_extra)
+    :sys.resume(esme)
 
     assert [
              {:init, _, _},
