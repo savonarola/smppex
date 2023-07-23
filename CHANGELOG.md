@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Changed
 - Rework time related code of SMPP sessions.
+- Drop `oserl` support.
 
 ## [3.2.1] - 2023-06-03
 
