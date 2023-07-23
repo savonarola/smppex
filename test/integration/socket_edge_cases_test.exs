@@ -47,6 +47,7 @@ defmodule SMPPEX.Integration.SocketEdgeCasesTest do
 
     accept = fn ->
       send(pid, {:accept, self()})
+
       receive do
         {:accept, res} -> res
       after
@@ -57,6 +58,7 @@ defmodule SMPPEX.Integration.SocketEdgeCasesTest do
 
     delay = fn ->
       send(pid, {:esme_pid, self()})
+
       receive do
         :continue -> :ok
       after
@@ -66,12 +68,13 @@ defmodule SMPPEX.Integration.SocketEdgeCasesTest do
     end
 
     start_supervised!({MC, {port, "good.rubybox.dev", accept}})
-    spawn_link fn -> ESME.start_link(port, "good.rubybox.dev", delay) end
+    spawn_link(fn -> ESME.start_link(port, "good.rubybox.dev", delay) end)
 
     receive do
       {:accept, mc_pid} ->
         mref = :erlang.monitor(:process, mc_pid)
         send(mc_pid, {:accept, {:stop, :ooops}})
+
         receive do
           {:DOWN, ^mref, :process, ^mc_pid, :ooops} -> :ok
         after
@@ -87,6 +90,7 @@ defmodule SMPPEX.Integration.SocketEdgeCasesTest do
       {:esme_pid, esme_pid} ->
         mref = :erlang.monitor(:process, esme_pid)
         send(esme_pid, :continue)
+
         receive do
           {:DOWN, ^mref, :process, ^esme_pid, :socket_closed} -> :ok
           {:DOWN, ^mref, :process, ^esme_pid, {:socket_error, :closed}} -> :ok
@@ -94,10 +98,9 @@ defmodule SMPPEX.Integration.SocketEdgeCasesTest do
           1000 ->
             flunk("ESME should have been terminated")
         end
-        after
+    after
       1000 ->
         flunk("ESME should have received :continue")
     end
-
   end
 end

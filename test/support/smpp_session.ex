@@ -28,6 +28,7 @@ defmodule Support.SMPPSession do
     Agent.update(st.callbacks_received, fn callbacks ->
       [{name, args} | callbacks]
     end)
+
     send(st.starter_pid, {name, args})
     st
   end

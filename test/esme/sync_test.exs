@@ -31,6 +31,7 @@ defmodule SMPPEX.ESME.SyncTest do
 
     mc_with_opts = fn handler, opts ->
       test_pid = self()
+
       start_supervised!({
         MC,
         session: {Support.Session, {callback_agent, handler, test_pid}},
@@ -224,6 +225,7 @@ defmodule SMPPEX.ESME.SyncTest do
         esme,
         SMPPEX.Pdu.Factory.bind_transmitter("system_id", "too_long_password")
       )
+
       send(pid, :done)
     end)
 
@@ -235,7 +237,6 @@ defmodule SMPPEX.ESME.SyncTest do
   end
 
   test "wait_for_pdus, resp", ctx do
-
     test_pid = self()
 
     ctx[:mc].(fn
@@ -297,7 +298,6 @@ defmodule SMPPEX.ESME.SyncTest do
     esme = ctx[:esme].()
 
     assert :timeout = ESMESync.wait_for_pdus(esme, 5)
-
   end
 
   test "stop", ctx do
@@ -335,6 +335,6 @@ defmodule SMPPEX.ESME.SyncTest do
 
     Session.send_pdu(mc_session, SMPPEX.Pdu.Factory.bind_transmitter("system_id", "password"))
 
-    assert wait_match fn -> [pdu: _] = ESMESync.pdus(esme) end
+    assert wait_match(fn -> [pdu: _] = ESMESync.pdus(esme) end)
   end
 end

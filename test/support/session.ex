@@ -73,6 +73,7 @@ defmodule Support.Session do
     Agent.update(agent_pid, fn callbacks ->
       [callback_info | callbacks]
     end)
+
     send(test_pid, callback_info)
     handler.(callback_info, st)
   end

@@ -28,7 +28,11 @@ defmodule SMPPEX.ESMETest do
     handler = fn {:init, _socket, _transport}, st -> {:ok, st} end
 
     assert {:ok, _} =
-             ESME.start_link('localhost', Server.port(server), {SupportSession, {pid, handler, self()}})
+             ESME.start_link(
+               'localhost',
+               Server.port(server),
+               {SupportSession, {pid, handler, self()}}
+             )
   end
 
   test "start_link by hostname as a string" do
@@ -38,7 +42,11 @@ defmodule SMPPEX.ESMETest do
     handler = fn {:init, _socket, _transport}, st -> {:ok, st} end
 
     assert {:ok, _} =
-             ESME.start_link("localhost", Server.port(server), {SupportSession, {pid, handler, self()}})
+             ESME.start_link(
+               "localhost",
+               Server.port(server),
+               {SupportSession, {pid, handler, self()}}
+             )
   end
 
   test "start_link when MC is down" do

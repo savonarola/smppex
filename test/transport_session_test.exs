@@ -160,7 +160,7 @@ defmodule SMPPEX.TransportSessionTest do
 
     context[:session] |> SMPPSession.stop(:some_reason)
 
-    assert wait_match fn -> [{:tcp_closed, _}] = Server.messages(context[:server]) end
+    assert wait_match(fn -> [{:tcp_closed, _}] = Server.messages(context[:server]) end)
   end
 
   test "handle_send_pdu_result, single pdu", context do
@@ -184,7 +184,7 @@ defmodule SMPPEX.TransportSessionTest do
     context[:session] |> SMPPSession.send_pdus([pdu])
 
     {:ok, pdu_data} = SMPPEX.Protocol.build(pdu)
-    assert wait_match fn -> ^pdu_data = Server.received_data(context[:server]) end
+    assert wait_match(fn -> ^pdu_data = Server.received_data(context[:server]) end)
   end
 
   test "handle_pdu returning send_pdus", context do
@@ -195,9 +195,10 @@ defmodule SMPPEX.TransportSessionTest do
     {:ok, pdu_tx_data} = SMPPEX.Protocol.build(pdu_tx)
     {:ok, pdu_rx_data} = SMPPEX.Protocol.build(pdu_rx)
     pdu_data = pdu_tx_data <> pdu_rx_data
-    assert wait_match fn ->
-      ^pdu_data = Server.received_data(context[:server])
-    end
+
+    assert wait_match(fn ->
+             ^pdu_data = Server.received_data(context[:server])
+           end)
   end
 
   test "reply", context do

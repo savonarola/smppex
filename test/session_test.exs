@@ -1200,7 +1200,6 @@ defmodule SMPPEX.SessionTest do
     {:ok, action_pdu_data} = SMPPEX.Protocol.build(action_pdu)
     Server.send(ctx[:server], action_pdu_data)
 
-
     assert wait_match(fn ->
              {:ok, {:pdu, _bind_pdu}, rest} =
                Server.received_data(ctx[:server]) |> SMPPEX.Protocol.parse()

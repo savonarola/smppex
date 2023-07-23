@@ -33,8 +33,10 @@ defmodule Support.SSL.MC do
     cond do
       accept == true ->
         {:ok, 0}
+
       accept == false ->
         {:stop, :ooops}
+
       true ->
         accept.()
     end

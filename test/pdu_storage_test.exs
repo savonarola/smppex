@@ -42,7 +42,8 @@ defmodule SMPPEX.PduStorageTest do
     storage1 = PduStorage.store(storage0, pdu1)
     Klotho.Mock.warp_by(500)
     storage2 = PduStorage.store(storage1, pdu2)
-    Klotho.Mock.warp_by(750) # 1250
+    # 1250
+    Klotho.Mock.warp_by(750)
 
     assert_received {:expire_pdus, @id}
 
