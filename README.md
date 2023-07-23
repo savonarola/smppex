@@ -1,13 +1,9 @@
 # Smppex
 
-<img align="right" width="192" height="192"
-     alt="Smppex avatar: Elixir logo with a chat bubble"
-     src="./logo.png">
-
-![Elixir CI](https://github.com/funbox/smppex/workflows/Elixir%20CI/badge.svg)
+![Elixir CI](https://github.com/savonarola/smppex/workflows/Elixir%20CI/badge.svg)
 [![Documentation](https://img.shields.io/badge/docs-hexpm-blue.svg)](http://hexdocs.pm/smppex)
 [![Version](https://img.shields.io/hexpm/v/smppex.svg)](https://hex.pm/packages/smppex)
-[![Coverage Status](https://coveralls.io/repos/github/funbox/smppex/badge.svg?branch=main&1504538909)](https://coveralls.io/github/funbox/smppex?branch=main)
+[![Coverage Status](https://coveralls.io/repos/github/savonarola/smppex/badge.svg?branch=main&1504538909)](https://coveralls.io/github/savonarola/smppex?branch=main)
 
 SMPP 3.4 protocol and framework implementation in [Elixir](http://elixir-lang.org).
 
@@ -48,10 +44,6 @@ To install and use the package:
 ## License
 
 This software is licensed under [MIT License](LICENSE).
-
-## Credits
-
-The picture for the project was made by [Igor Garybaldi](http://pandabanda.com/).
 
 ## Project support
 
