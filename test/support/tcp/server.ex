@@ -80,12 +80,12 @@ defmodule Support.TCP.Server do
       :tcp_close ->
         GenTCP.close(sock)
     after
-      1_000 ->
+      2_000 ->
         GenTCP.close(sock)
     end
   end
 
   defp wait_for_shutdown do
-    Timer.sleep(1_000)
+    Timer.sleep(2_000)
   end
 end

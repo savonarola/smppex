@@ -44,6 +44,11 @@ defmodule Support.Session do
     register(st, {:handle_socket_closed})
   end
 
+  ## For sync
+  def handle_call(:sync, _from, st) do
+    {:reply, :ok, st}
+  end
+
   def handle_call(request, from, st) do
     register(st, {:handle_call, request, from})
   end

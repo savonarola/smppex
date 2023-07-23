@@ -68,7 +68,7 @@ defmodule SMPPEX.Session.AutoPduHandler do
   @spec drop_expired(t) :: :ok
 
   def drop_expired(handler) do
-    PduStorage.fetch_expired(handler.pdu_storage)
+    _ = PduStorage.fetch_expired(handler.pdu_storage)
     :ok
   end
 

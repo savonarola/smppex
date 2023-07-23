@@ -46,7 +46,7 @@ defmodule SMPPEX.PduStorage do
     case ETS.take(storage.by_sequence_number, sequence_number) do
       [{^sequence_number, {create_time, pdu}}] ->
         ref = Pdu.ref(pdu)
-        ETS.delete(storage.by_expire, {{create_time, ref}, sequence_number})
+        ETS.delete(storage.by_expire, {create_time, ref})
         new_storage = reschedule_expire(storage, create_time)
         {new_storage, [pdu]}
 

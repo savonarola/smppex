@@ -609,7 +609,8 @@ defmodule SMPPEX.Session do
   end
 
   defp check_expired_pdus(:auto_pdus, st) do
-    AutoPduHandler.drop_expired(st.auto_pdu_handler)
+    :ok = AutoPduHandler.drop_expired(st.auto_pdu_handler)
+    {:noreply, [], st}
   end
 
   defp check_expired_pdus(:custom_pdus, st) do
@@ -626,6 +627,7 @@ defmodule SMPPEX.Session do
   end
 
   defp check_timers(timer_event, st) do
+    # dbg(timer_event)
     case SMPPTimers.handle_timer_event(st.timers, timer_event) do
       {:ok, new_timers} ->
         new_st = %Session{st | timers: new_timers}
@@ -638,7 +640,7 @@ defmodule SMPPEX.Session do
       {:enquire_link, new_timers} ->
         new_sequence_number = st.sequence_number + 1
 
-        {enquire_link, new_sequence_number} =
+        {new_auto_pdu_handler, enquire_link} =
           AutoPduHandler.enquire_link(
             st.auto_pdu_handler,
             new_sequence_number
@@ -648,6 +650,7 @@ defmodule SMPPEX.Session do
          %Session{
            st
            | sequence_number: new_sequence_number,
+             auto_pdu_handler: new_auto_pdu_handler,
              timers: new_timers
          }}
     end
