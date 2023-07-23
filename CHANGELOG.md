@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Changed
+- Rework time related code of SMPP sessions.
+
 ## [3.2.1] - 2023-06-03
 
 - Drop support of old Elixir & OTP versions (OTP 24+ and Elixir 1.12+ are required).
