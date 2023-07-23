@@ -2,7 +2,8 @@ defmodule Support.SMPPSession do
   @moduledoc false
 
   defstruct callbacks_received: nil,
-            pdu_handler: nil
+            pdu_handler: nil,
+            starter_pid: nil
 
   @transport :ranch_tcp
   @timeout 1000
@@ -13,9 +14,13 @@ defmodule Support.SMPPSession do
   @behaviour TransportSession
 
   def start_link(host, port, pid) do
+    starter_pid = self()
     sock_opts = [:binary, {:packet, 0}, {:active, :once}]
     {:ok, socket} = @transport.connect(host, port, sock_opts, @timeout)
-    {:ok, session} = TransportSession.start_esme(socket, @transport, {__MODULE__, [pid]})
+
+    {:ok, session} =
+      TransportSession.start_esme(socket, @transport, {__MODULE__, [pid, starter_pid]})
+
     session
   end
 
@@ -23,7 +28,7 @@ defmodule Support.SMPPSession do
     Agent.update(st.callbacks_received, fn callbacks ->
       [{name, args} | callbacks]
     end)
-
+    send(st.starter_pid, {name, args})
     st
   end
 
@@ -43,9 +48,15 @@ defmodule Support.SMPPSession do
     TransportSession.call(session, {:stop, reason})
   end
 
-  def init(_socket, _transport, [pid]) do
+  def init(_socket, _transport, [pid, starter_pid]) do
     Process.flag(:trap_exit, true)
-    {:ok, %SMPPSession{pdu_handler: fn _pdu -> {:ok, []} end, callbacks_received: pid}}
+
+    {:ok,
+     %SMPPSession{
+       pdu_handler: fn _pdu -> {:ok, []} end,
+       callbacks_received: pid,
+       starter_pid: starter_pid
+     }}
   end
 
   def handle_pdu(pdu_info, st) do

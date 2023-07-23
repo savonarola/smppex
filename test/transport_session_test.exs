@@ -1,15 +1,14 @@
 defmodule SMPPEX.TransportSessionTest do
   use ExUnit.Case
 
-  alias :timer, as: Timer
-
   alias Support.TCP.Server
   alias Support.SMPPSession
+
+  import Support.TCP.Helpers
 
   setup do
     server = Server.start_link()
     {:ok, pid} = Agent.start_link(fn -> [] end)
-    Timer.sleep(50)
     session = SMPPSession.start_link({127, 0, 0, 1}, Server.port(server), pid)
 
     callbacks_received = fn ->
@@ -41,11 +40,7 @@ defmodule SMPPEX.TransportSessionTest do
       00
     >>)
 
-    Timer.sleep(50)
-
-    assert [
-             {:terminate, [{:parse_error, "Invalid PDU command_length 15"}]}
-           ] = context[:callbacks_received].()
+    assert_receive {:terminate, [{:parse_error, "Invalid PDU command_length 15"}]}
   end
 
   test "handle_pdu with valid pdu", context do
@@ -54,11 +49,7 @@ defmodule SMPPEX.TransportSessionTest do
 
     Server.send(context[:server], pdu_data)
 
-    Timer.sleep(50)
-
-    assert [
-             {:handle_pdu, [{:pdu, _}]}
-           ] = context[:callbacks_received].()
+    assert_receive {:handle_pdu, [{:pdu, _}]}
   end
 
   test "handle_pdu with unknown pdu", context do
@@ -84,11 +75,7 @@ defmodule SMPPEX.TransportSessionTest do
       0xCC
     >>)
 
-    Timer.sleep(50)
-
-    assert [
-             {:handle_pdu, [{:unparsed_pdu, _, _}]}
-           ] = context[:callbacks_received].()
+    assert_receive {:handle_pdu, [{:unparsed_pdu, _, _}]}
   end
 
   test "handle_pdu returning stop", context do
@@ -101,14 +88,11 @@ defmodule SMPPEX.TransportSessionTest do
 
     Server.send(context[:server], pdu_data)
 
-    Timer.sleep(50)
+    assert_receive {:terminate, [:custom_stop]}
 
-    assert [
-             {:handle_pdu, [{:pdu, _}]},
-             {:terminate, [:custom_stop]}
-           ] = context[:callbacks_received].()
-
-    assert {:tcp_closed, _} = Server.messages(context[:server]) |> Enum.reverse() |> hd
+    assert wait_match(fn ->
+             [{:tcp_closed, _} | _] = Server.messages(context[:server]) |> Enum.reverse()
+           end)
   end
 
   test "handle_pdu returning new session", context do
@@ -119,11 +103,7 @@ defmodule SMPPEX.TransportSessionTest do
 
     Server.send(context[:server], pdu_data)
 
-    Timer.sleep(50)
-
-    assert [
-             {:handle_pdu, [{:pdu, _}]}
-           ] = context[:callbacks_received].()
+    assert_receive {:handle_pdu, [{:pdu, _}]}
   end
 
   test "handle_pdu returning additional pdus", context do
@@ -137,14 +117,10 @@ defmodule SMPPEX.TransportSessionTest do
 
     Server.send(context[:server], pdu_tx_data)
 
-    Timer.sleep(50)
+    assert_receive {:handle_pdu, [{:pdu, _}]}
+    assert_receive {:handle_send_pdu_result, [^pdu_rx, :ok]}
 
-    assert [
-             {:handle_pdu, [{:pdu, _}]},
-             {:handle_send_pdu_result, [^pdu_rx, :ok]}
-           ] = context[:callbacks_received].()
-
-    assert pdu_rx_data == Server.received_data(context[:server])
+    assert wait_match(fn -> ^pdu_rx_data = Server.received_data(context[:server]) end)
   end
 
   test "handle_pdu returning additional pdus & stop", context do
@@ -160,16 +136,14 @@ defmodule SMPPEX.TransportSessionTest do
 
     Server.send(context[:server], pdu_tx_data)
 
-    Timer.sleep(50)
+    assert_receive {:handle_pdu, [{:pdu, _}]}
+    assert_receive {:handle_send_pdu_result, [^pdu_rx, :ok]}
+    assert_receive {:terminate, [:custom_stop]}
 
-    assert [
-             {:handle_pdu, [{:pdu, _}]},
-             {:handle_send_pdu_result, [^pdu_rx, :ok]},
-             {:terminate, [:custom_stop]}
-           ] = context[:callbacks_received].()
-
-    assert pdu_rx_data == Server.received_data(context[:server])
-    assert {:tcp_closed, _} = Server.messages(context[:server]) |> Enum.reverse() |> hd
+    assert wait_match(fn ->
+             ^pdu_rx_data = Server.received_data(context[:server])
+             [{:tcp_closed, _} | _] = Server.messages(context[:server]) |> Enum.reverse()
+           end)
   end
 
   test "handle_socket_closed", context do
@@ -177,12 +151,8 @@ defmodule SMPPEX.TransportSessionTest do
 
     Server.stop(context[:server])
 
-    Timer.sleep(50)
-
-    assert [
-             {:handle_socket_closed, []},
-             {:terminate, [:socket_closed]}
-           ] == context[:callbacks_received].()
+    assert_receive {:handle_socket_closed, []}
+    assert_receive {:terminate, [:socket_closed]}
   end
 
   test "stop from handle_call", context do
@@ -190,20 +160,14 @@ defmodule SMPPEX.TransportSessionTest do
 
     context[:session] |> SMPPSession.stop(:some_reason)
 
-    Timer.sleep(50)
-
-    assert [{:tcp_closed, _}] = Server.messages(context[:server])
+    assert wait_match fn -> [{:tcp_closed, _}] = Server.messages(context[:server]) end
   end
 
   test "handle_send_pdu_result, single pdu", context do
     pdu = SMPPEX.Pdu.Factory.bind_transmitter("system_id", "password")
     context[:session] |> SMPPSession.send_pdus([pdu])
 
-    Timer.sleep(50)
-
-    assert [
-             {:handle_send_pdu_result, [pdu, :ok]}
-           ] == context[:callbacks_received].()
+    assert_receive {:handle_send_pdu_result, [^pdu, :ok]}
   end
 
   test "handle_send_pdu_result, multiple pdus", context do
@@ -211,22 +175,16 @@ defmodule SMPPEX.TransportSessionTest do
     pdu_rx = SMPPEX.Pdu.Factory.bind_receiver("system_id", "password")
     context[:session] |> SMPPSession.send_pdus([pdu_tx, pdu_rx])
 
-    Timer.sleep(50)
-
-    assert [
-             {:handle_send_pdu_result, [pdu_tx, :ok]},
-             {:handle_send_pdu_result, [pdu_rx, :ok]}
-           ] == context[:callbacks_received].()
+    assert_receive {:handle_send_pdu_result, [^pdu_tx, :ok]}
+    assert_receive {:handle_send_pdu_result, [^pdu_rx, :ok]}
   end
 
   test "send_pdus as handle_call result", context do
     pdu = SMPPEX.Pdu.Factory.bind_transmitter("system_id", "password")
     context[:session] |> SMPPSession.send_pdus([pdu])
 
-    Timer.sleep(50)
-
     {:ok, pdu_data} = SMPPEX.Protocol.build(pdu)
-    assert pdu_data == Server.received_data(context[:server])
+    assert wait_match fn -> ^pdu_data = Server.received_data(context[:server]) end
   end
 
   test "handle_pdu returning send_pdus", context do
@@ -234,11 +192,12 @@ defmodule SMPPEX.TransportSessionTest do
     pdu_rx = SMPPEX.Pdu.Factory.bind_receiver("system_id", "password")
     context[:session] |> SMPPSession.send_pdus([pdu_tx, pdu_rx])
 
-    Timer.sleep(50)
-
     {:ok, pdu_tx_data} = SMPPEX.Protocol.build(pdu_tx)
     {:ok, pdu_rx_data} = SMPPEX.Protocol.build(pdu_rx)
-    assert pdu_tx_data <> pdu_rx_data == Server.received_data(context[:server])
+    pdu_data = pdu_tx_data <> pdu_rx_data
+    assert wait_match fn ->
+      ^pdu_data = Server.received_data(context[:server])
+    end
   end
 
   test "reply", context do

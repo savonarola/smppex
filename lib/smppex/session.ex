@@ -627,7 +627,6 @@ defmodule SMPPEX.Session do
   end
 
   defp check_timers(timer_event, st) do
-    # dbg(timer_event)
     case SMPPTimers.handle_timer_event(st.timers, timer_event) do
       {:ok, new_timers} ->
         new_st = %Session{st | timers: new_timers}

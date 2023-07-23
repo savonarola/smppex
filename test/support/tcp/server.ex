@@ -16,7 +16,14 @@ defmodule Support.TCP.Server do
 
     {:ok, received_data_pid} = Agent.start_link(fn -> %{data: <<>>, messages: []} end)
 
-    server_pid = spawn_link(fn -> listen(port, received_data_pid) end)
+    pid = self()
+    ref = make_ref()
+
+    server_pid = spawn_link(fn -> listen(port, received_data_pid, {pid, ref}) end)
+
+    receive do
+      ^ref -> :ok
+    end
 
     %Server{server_pid: server_pid, received_data_pid: received_data_pid, port: port}
   end
@@ -42,8 +49,9 @@ defmodule Support.TCP.Server do
     Agent.get(server.received_data_pid, fn received_data -> received_data.data end)
   end
 
-  defp listen(port, received_data_pid) do
+  defp listen(port, received_data_pid, {starter_pid, ref}) do
     {:ok, listen_sock} = GenTCP.listen(port, [:binary, {:active, true}])
+    Kernel.send(starter_pid, ref)
     {:ok, sock} = GenTCP.accept(listen_sock)
     :ok = GenTCP.close(listen_sock)
     loop(received_data_pid, sock)

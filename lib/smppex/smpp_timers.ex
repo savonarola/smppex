@@ -117,7 +117,6 @@ defmodule SMPPEX.SMPPTimers do
   end
 
   defp schedule_timer(timers, timer_name, interval) do
-    # dbg([:schedule_timer, timer_name, interval])
     timer_ref = Klotho.send_after(interval, self(), {:smpp_timer, timer_name})
     Map.put(timers, timer_name, timer_ref)
   end

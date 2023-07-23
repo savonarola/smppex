@@ -259,6 +259,7 @@ defmodule SMPPEX.ESME.Sync do
   end
 
   defp call(pid, request, timeout) do
+    ## TODO use alias not to pollute the mailbox with late replies
     ref = make_ref()
     from = {ref, self()}
     :ok = Session.call(pid, {:call, request, from})

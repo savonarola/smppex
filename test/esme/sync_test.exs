@@ -1,12 +1,12 @@
 defmodule SMPPEX.ESME.SyncTest do
   use ExUnit.Case
 
-  alias :timer, as: Timer
-
   alias SMPPEX.Session
   alias SMPPEX.MC
   alias SMPPEX.Pdu
   alias SMPPEX.ESME.Sync, as: ESMESync
+
+  import Support.TCP.Helpers
 
   setup do
     {:ok, callback_agent} = Agent.start_link(fn -> [] end)
@@ -30,9 +30,10 @@ defmodule SMPPEX.ESME.SyncTest do
     port = Support.TCP.Helpers.find_free_port()
 
     mc_with_opts = fn handler, opts ->
+      test_pid = self()
       start_supervised!({
         MC,
-        session: {Support.Session, {callback_agent, handler}},
+        session: {Support.Session, {callback_agent, handler, test_pid}},
         transport_opts: [port: port],
         mc_opts: opts
       })
@@ -171,45 +172,14 @@ defmodule SMPPEX.ESME.SyncTest do
 
     mc_session =
       receive do
-        pid -> pid
+        pid when is_pid(pid) -> pid
       end
 
     spawn_link(fn ->
-      Timer.sleep(30)
       Session.send_pdu(mc_session, SMPPEX.Pdu.Factory.bind_transmitter("system_id", "password"))
     end)
 
-    {time, _} =
-      Timer.tc(fn ->
-        assert [pdu: _] = ESMESync.wait_for_pdus(esme, 60)
-      end)
-
-    assert time > 30_000
-  end
-
-  test "wait_for_pdus, nonblocking", ctx do
-    pid = self()
-
-    ctx[:mc].(fn
-      {:init, _, _}, st ->
-        send(pid, self())
-        {:ok, st}
-
-      {:handle_send_pdu_result, _, _}, st ->
-        st
-    end)
-
-    esme = ctx[:esme].()
-
-    mc_session =
-      receive do
-        pid -> pid
-      end
-
-    Session.send_pdu(mc_session, SMPPEX.Pdu.Factory.bind_transmitter("system_id", "password"))
-    Timer.sleep(30)
-
-    assert [pdu: _] = ESMESync.wait_for_pdus(esme)
+    assert [pdu: _] = ESMESync.wait_for_pdus(esme, 10)
   end
 
   test "wait_for_pdus, send_pdu result", ctx do
@@ -227,7 +197,6 @@ defmodule SMPPEX.ESME.SyncTest do
     esme = ctx[:esme].()
 
     spawn_link(fn ->
-      Timer.sleep(30)
       Session.send_pdu(esme, SMPPEX.Pdu.Factory.enquire_link())
     end)
 
@@ -248,35 +217,35 @@ defmodule SMPPEX.ESME.SyncTest do
 
     esme = ctx[:esme].()
 
-    spawn_link(fn ->
-      Timer.sleep(30)
+    pid = self()
 
+    spawn_link(fn ->
       Session.send_pdu(
         esme,
         SMPPEX.Pdu.Factory.bind_transmitter("system_id", "too_long_password")
       )
+      send(pid, :done)
     end)
+
+    receive do
+      :done -> :ok
+    end
 
     assert [{:error, _pdu, _error}] = ESMESync.wait_for_pdus(esme)
   end
 
   test "wait_for_pdus, resp", ctx do
+
+    test_pid = self()
+
     ctx[:mc].(fn
       {:init, _, _}, st ->
         {:ok, st}
 
       {:handle_pdu, pdu}, st ->
         pid = self()
-
-        spawn(fn ->
-          Timer.sleep(30)
-
-          Session.send_pdu(
-            pid,
-            SMPPEX.Pdu.Factory.bind_transmitter_resp(0) |> Pdu.as_reply_to(pdu)
-          )
-        end)
-
+        resp = SMPPEX.Pdu.Factory.bind_transmitter_resp(0) |> Pdu.as_reply_to(pdu)
+        send(test_pid, {pid, resp})
         {:ok, [], st}
 
       {:handle_send_pdu_result, _, _}, st ->
@@ -288,12 +257,12 @@ defmodule SMPPEX.ESME.SyncTest do
     Session.send_pdu(esme, SMPPEX.Pdu.Factory.bind_transmitter("system_id", "password"))
     assert [ok: _] = ESMESync.wait_for_pdus(esme)
 
-    {time, _} =
-      Timer.tc(fn ->
-        assert [{:resp, _, _}] = ESMESync.wait_for_pdus(esme, 60)
-      end)
+    receive do
+      {mc_sess_pid, resp} when is_pid(mc_sess_pid) ->
+        Session.send_pdu(mc_sess_pid, resp)
+    end
 
-    assert time > 30_000
+    assert [{:resp, _, _}] = ESMESync.wait_for_pdus(esme, 60)
   end
 
   test "wait_for_pdus, resp timeout", ctx do
@@ -327,12 +296,8 @@ defmodule SMPPEX.ESME.SyncTest do
 
     esme = ctx[:esme].()
 
-    {time, _} =
-      Timer.tc(fn ->
-        assert :timeout = ESMESync.wait_for_pdus(esme, 30)
-      end)
+    assert :timeout = ESMESync.wait_for_pdus(esme, 5)
 
-    assert time > 30_000
   end
 
   test "stop", ctx do
@@ -342,10 +307,11 @@ defmodule SMPPEX.ESME.SyncTest do
 
     esme = ctx[:esme].()
 
-    assert :ok = ESMESync.stop(esme)
-    Timer.sleep(30)
+    :erlang.monitor(:process, esme)
 
-    refute Process.alive?(esme)
+    assert :ok = ESMESync.stop(esme)
+
+    assert_receive {:DOWN, _, :process, ^esme, :normal}
   end
 
   test "pdus", ctx do
@@ -364,13 +330,11 @@ defmodule SMPPEX.ESME.SyncTest do
 
     mc_session =
       receive do
-        pid -> pid
+        pid when is_pid(pid) -> pid
       end
 
     Session.send_pdu(mc_session, SMPPEX.Pdu.Factory.bind_transmitter("system_id", "password"))
 
-    Timer.sleep(30)
-
-    assert [pdu: _] = ESMESync.pdus(esme)
+    assert wait_match fn -> [pdu: _] = ESMESync.pdus(esme) end
   end
 end

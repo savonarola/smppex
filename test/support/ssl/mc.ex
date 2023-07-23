@@ -30,10 +30,13 @@ defmodule Support.SSL.MC do
 
   @impl true
   def init(_socket, _transport, [accept]) do
-    if accept do
-      {:ok, 0}
-    else
-      {:stop, :ooops}
+    cond do
+      accept == true ->
+        {:ok, 0}
+      accept == false ->
+        {:stop, :ooops}
+      true ->
+        accept.()
     end
   end
 
