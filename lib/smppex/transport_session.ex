@@ -174,7 +174,7 @@ defmodule SMPPEX.TransportSession do
   end
 
   defp wait_for_data(state) do
-    {_ok, closed, _error, _passive} = state.transport.messages
+    {_ok, closed, _error, _passive} = state.transport.messages()
 
     case state.transport.setopts(state.socket, [{:active, :once}]) do
       :ok -> {:noreply, state}
@@ -184,7 +184,7 @@ defmodule SMPPEX.TransportSession do
   end
 
   def handle_info(message, state) do
-    {ok, closed, error, _passive} = state.transport.messages
+    {ok, closed, error, _passive} = state.transport.messages()
 
     case message do
       {^ok, _socket, data} ->
