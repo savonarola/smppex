@@ -39,6 +39,7 @@ defmodule Smppex.Mixfile do
       {:ex_doc, "~> 0.23", only: :dev},
       {:credo, "~> 1.5", only: [:dev, :test], runtime: false},
       {:klotho, "~> 0.1", only: [:dev, :test]},
+      {:castore, "~> 1.0", only: [:dev, :test]},
       {:ranch, "~> 2.0"},
       {:ex2ms, "~> 1.0"}
     ]

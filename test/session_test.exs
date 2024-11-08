@@ -1468,13 +1468,15 @@ defmodule SMPPEX.SessionTest do
         {:code_change, _old_vsn, _extra}, st -> {:ok, st}
       end)
 
+    version = String.to_charlist("0.0.1")
+
     :sys.suspend(esme)
-    :sys.change_code(esme, Support.Session, '0.0.1', :some_extra)
+    :sys.change_code(esme, Support.Session, version, :some_extra)
     :sys.resume(esme)
 
     assert [
              {:init, _, _},
-             {:code_change, '0.0.1', :some_extra}
+             {:code_change, ^version, :some_extra}
            ] = ctx[:callbacks].()
   end
 
@@ -1485,13 +1487,15 @@ defmodule SMPPEX.SessionTest do
         {:code_change, _old_vsn, _extra}, _st -> {:error, :oops}
       end)
 
+    version = String.to_charlist("0.0.1")
+
     :sys.suspend(esme)
-    :sys.change_code(esme, Support.Session, '0.0.1', :some_extra)
+    :sys.change_code(esme, Support.Session, version, :some_extra)
     :sys.resume(esme)
 
     assert [
              {:init, _, _},
-             {:code_change, '0.0.1', :some_extra}
+             {:code_change, ^version, :some_extra}
            ] = ctx[:callbacks].()
   end
 

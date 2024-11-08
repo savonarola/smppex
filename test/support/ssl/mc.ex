@@ -18,9 +18,9 @@ defmodule Support.SSL.MC do
         transport_opts: %{
           socket_opts: [
             port: port,
-            cacertfile: 'test/support/ssl/ca.crt',
-            certfile: 'test/support/ssl/#{certname}.crt',
-            keyfile: 'test/support/ssl/cert.key'
+            cacertfile: String.to_charlist("test/support/ssl/ca.crt"),
+            certfile: String.to_charlist("test/support/ssl/#{certname}.crt"),
+            keyfile: String.to_charlist("test/support/ssl/cert.key")
           ]
         }
       },

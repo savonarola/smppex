@@ -15,7 +15,7 @@ defmodule Support.SSL.ESME do
       {__MODULE__, %{pid: self(), delay: delay}},
       transport: :ranch_ssl,
       socket_opts: [
-        cacertfile: 'test/support/ssl/ca.crt',
+        cacertfile: String.to_charlist("test/support/ssl/ca.crt"),
         server_name_indication: String.to_charlist(hostname),
         verify: :verify_peer
       ]

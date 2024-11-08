@@ -27,7 +27,7 @@ defmodule SMPPEX.ESMETest do
 
     assert {:ok, _} =
              ESME.start_link(
-               'localhost',
+               String.to_charlist("localhost"),
                Server.port(server),
                {SupportSession, {pid, handler, self()}}
              )
@@ -50,7 +50,7 @@ defmodule SMPPEX.ESMETest do
   test "start_link when MC is down" do
     server = Server.start_link()
     port = Server.port(server)
-    {:ok, sock} = :gen_tcp.connect('localhost', port, [])
+    {:ok, sock} = :gen_tcp.connect(String.to_charlist("localhost"), port, [])
     :ok = :gen_tcp.close(sock)
 
     {:ok, pid} = Agent.start_link(fn -> [] end)
