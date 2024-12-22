@@ -63,6 +63,7 @@ jobs:
             otp_release: 26.2
 
           # Elixir 1.17
+
           - elixir: 1.17.3
             otp_release: 25.3
 
@@ -70,6 +71,11 @@ jobs:
             otp_release: 26.2
 
           - elixir: 1.17.3
+            otp_release: 27.1
+
+          # Elixir 1.18
+
+          - elixir: 1.18.0
             otp_release: 27.1
 
     steps:
