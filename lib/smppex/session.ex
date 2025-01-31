@@ -430,6 +430,9 @@ defmodule SMPPEX.Session do
           | auto_pdu_handler: new_auto_pdu_handler
         })
 
+      {new_auto_pdu_handler, :skip} ->
+        {:ok, [], %Session{new_st | auto_pdu_handler: new_auto_pdu_handler}}
+
       {new_auto_pdu_handler, :skip, pdus} ->
         {:ok, pdus, %Session{new_st | auto_pdu_handler: new_auto_pdu_handler}}
     end

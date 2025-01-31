@@ -50,7 +50,7 @@ defmodule SMPPEX.Session.AutoPduHandler do
     end
   end
 
-  @spec handle_pdu(t, Pdu.t()) :: {t, :proceed} | {t, :skip, [Pdu.t()]}
+  @spec handle_pdu(t, Pdu.t()) :: {t, :proceed} | {t, :skip, [Pdu.t()]} | {t, :skip}
 
   def handle_pdu(handler, pdu) do
     cond do
