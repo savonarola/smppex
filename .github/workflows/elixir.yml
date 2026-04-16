@@ -10,6 +10,8 @@ jobs:
   test:
     name: Build and test
     runs-on: ubuntu-22.04
+    env:
+      MIX_ENV: test
 
     # https://github.com/elixir-lang/elixir/blob/main/lib/elixir/pages/references/compatibility-and-deprecations.md
     strategy:
@@ -75,18 +77,26 @@ jobs:
 
           # Elixir 1.18
 
-          - elixir: 1.18.0
-            otp_release: 27.1
+          - elixir: 1.18.4
+            otp_release: 27.3
+
+          # Elixir 1.19
+
+          - elixir: 1.19.5
+            otp_release: 27.3
+
+          - elixir: 1.19.5
+            otp_release: 28.1
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v6
     - name: Set up Elixir
       uses: erlef/setup-beam@v1
       with:
         elixir-version: ${{ matrix.elixir }}
         otp-version: ${{ matrix.otp_release }}
     - name: Restore dependencies cache
-      uses: actions/cache@v2
+      uses: actions/cache@v4
       with:
         path: deps
         key: ${{ matrix.elixir }}-${{ matrix.otp_release }}-${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
@@ -106,14 +116,14 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       MIX_ENV: test
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v6
     - name: Set up Elixir
       uses: erlef/setup-beam@v1
       with:
-        elixir-version: '1.14.5'
-        otp-version: '25.3'
+        elixir-version: '1.19.5'
+        otp-version: '28.1'
     - name: Restore dependencies cache
-      uses: actions/cache@v2
+      uses: actions/cache@v4
       with:
         path: deps
         key: coveralls-${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
