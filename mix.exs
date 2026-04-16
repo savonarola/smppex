@@ -34,10 +34,10 @@ defmodule Smppex.Mixfile do
   defp deps do
     [
       {:excoveralls, "~> 0.5", only: :test},
-      {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
+      {:dialyxir, "~> 1.0", only: [:dev, :test], runtime: false},
       {:earmark, "~> 1.4", only: :dev},
       {:ex_doc, "~> 0.23", only: :dev},
-      {:credo, "~> 1.5", only: [:dev, :test], runtime: false},
+      {:credo, "~> 1.5", only: [:dev], runtime: false},
       {:castore, "~> 1.0", only: [:dev, :test]},
       {:ranch, "~> 2.0"},
       {:ex2ms, "~> 1.0"},
