@@ -88,6 +88,20 @@ jobs:
           - elixir: 1.19.5
             otp_release: 28.1
 
+          - elixir: 1.19.5
+            otp_release: 29.0
+
+          # Elixir 1.20
+
+          - elixir: 1.20.0
+            otp_release: 27.1
+
+          - elixir: 1.20.0
+            otp_release: 28.0
+
+          - elixir: 1.20.0
+            otp_release: 29.0
+
     steps:
     - uses: actions/checkout@v6
     - name: Set up Elixir
