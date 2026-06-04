@@ -193,7 +193,7 @@ defmodule SMPPEX.Pdu do
 
   """
 
-  def set_mandatory_field(pdu, name, value) do
+  def set_mandatory_field(%Pdu{} = pdu, name, value) do
     %Pdu{pdu | mandatory: Map.put(pdu.mandatory, name, value)}
   end
 
@@ -257,7 +257,7 @@ defmodule SMPPEX.Pdu do
 
   """
 
-  def set_optional_field(pdu, name, value) when is_atom(name) do
+  def set_optional_field(%Pdu{} = pdu, name, value) when is_atom(name) do
     optional = Map.delete(pdu.optional, name)
 
     optional =
@@ -269,7 +269,7 @@ defmodule SMPPEX.Pdu do
     %Pdu{pdu | optional: Map.put(optional, name, value)}
   end
 
-  def set_optional_field(pdu, id, value) when is_integer(id) do
+  def set_optional_field(%Pdu{} = pdu, id, value) when is_integer(id) do
     optional = Map.delete(pdu.optional, id)
 
     optional =
@@ -506,7 +506,7 @@ defmodule SMPPEX.Pdu do
 
   """
 
-  def as_reply_to(pdu, reply_to_pdu) do
+  def as_reply_to(%Pdu{} = pdu, reply_to_pdu) do
     %Pdu{pdu | sequence_number: reply_to_pdu.sequence_number}
   end
 

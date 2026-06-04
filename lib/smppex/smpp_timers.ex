@@ -46,7 +46,7 @@ defmodule SMPPEX.SMPPTimers do
 
   @spec handle_bind(t) :: t
 
-  def handle_bind(timers) do
+  def handle_bind(%SMPPTimers{} = timers) do
     %SMPPTimers{timers | session_init_state: :bound}
     |> cancel_timer(:session_init_timer)
     |> reschedule_timer(:inactivity_timer, :inactivity_limit)
@@ -63,7 +63,7 @@ defmodule SMPPEX.SMPPTimers do
 
   @spec handle_peer_action(t) :: t
 
-  def handle_peer_action(timers) do
+  def handle_peer_action(%SMPPTimers{} = timers) do
     %SMPPTimers{timers | enquire_link_state: :active}
     |> reschedule_timer(:enquire_link_timer, :enquire_link_limit)
     |> cancel_timer(:enquire_link_resp_timer)
@@ -81,7 +81,7 @@ defmodule SMPPEX.SMPPTimers do
     {:stop, :session_init_timer}
   end
 
-  def handle_timer_event(timers, {:smpp_timer, :enquire_link_timer}) do
+  def handle_timer_event(%SMPPTimers{} = timers, {:smpp_timer, :enquire_link_timer}) do
     new_timers =
       %SMPPTimers{timers | enquire_link_state: :waiting_resp}
       |> cancel_timer(:enquire_link_timer)

@@ -201,12 +201,12 @@ defmodule SMPPEX.TransportSession do
     end
   end
 
-  defp handle_socket_closed(state) do
+  defp handle_socket_closed(%TransportSession{} = state) do
     {reason, new_module_state} = state.module.handle_socket_closed(state.module_state)
     stop(%TransportSession{state | module_state: new_module_state}, reason)
   end
 
-  defp handle_socket_error(state, error) do
+  defp handle_socket_error(%TransportSession{} = state, error) do
     {reason, new_module_state} = state.module.handle_socket_error(error, state.module_state)
     stop(%TransportSession{state | module_state: new_module_state}, reason)
   end
@@ -270,7 +270,7 @@ defmodule SMPPEX.TransportSession do
     end
   end
 
-  defp send_pdus(module_state, state, []) do
+  defp send_pdus(module_state, %TransportSession{} = state, []) do
     %TransportSession{state | module_state: module_state}
   end
 
@@ -324,7 +324,7 @@ defmodule SMPPEX.TransportSession do
     send_pdus(new_module_state, state, pdus)
   end
 
-  def code_change(old_vsn, state, extra) do
+  def code_change(old_vsn, %TransportSession{} = state, extra) do
     case state.module.code_change(old_vsn, state.module_state, extra) do
       {:ok, new_module_state} ->
         {:ok, %TransportSession{state | module_state: new_module_state}}

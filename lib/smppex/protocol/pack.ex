@@ -48,8 +48,6 @@ defmodule SMPPEX.Protocol.Pack do
   def c_octet_string(str, _spec, _kind) when not is_binary(str),
     do: {:error, @invalid_c_octet_string_value}
 
-  def c_octet_string(nil, length_spec, kind), do: c_octet_string("", length_spec, kind)
-
   def c_octet_string(str, {:fixed, len}, kind) when is_integer(len) and len >= 1 do
     c_octet_string_with_general_check(str, &(&1 == len), kind)
   end

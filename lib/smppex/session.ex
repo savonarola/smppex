@@ -420,7 +420,7 @@ defmodule SMPPEX.Session do
     |> process_handle_unparsed_pdu_reply()
   end
 
-  def handle_pdu({:pdu, pdu}, st) do
+  def handle_pdu({:pdu, pdu}, %Session{} = st) do
     new_st = update_timers_with_incoming_pdu(pdu, st)
 
     case AutoPduHandler.handle_pdu(new_st.auto_pdu_handler, pdu) do
@@ -439,7 +439,7 @@ defmodule SMPPEX.Session do
   end
 
   @impl TransportSession
-  def handle_send_pdu_result(pdu, send_pdu_result, st) do
+  def handle_send_pdu_result(pdu, send_pdu_result, %Session{} = st) do
     new_st = update_timers_with_outgoing_pdu(pdu, send_pdu_result, st)
 
     with {:error, _} <- send_pdu_result do
@@ -503,19 +503,19 @@ defmodule SMPPEX.Session do
   end
 
   @impl TransportSession
-  def handle_socket_closed(st) do
+  def handle_socket_closed(%Session{} = st) do
     {reason, new_module_state} = st.module.handle_socket_closed(st.module_state)
     {reason, %Session{st | module_state: new_module_state}}
   end
 
   @impl TransportSession
-  def handle_socket_error(error, st) do
+  def handle_socket_error(error, %Session{} = st) do
     {reason, new_module_state} = st.module.handle_socket_error(error, st.module_state)
     {reason, %Session{st | module_state: new_module_state}}
   end
 
   @impl TransportSession
-  def terminate(reason, st) do
+  def terminate(reason, %Session{} = st) do
     {new_pdu_storage, lost_pdus} = PduStorage.fetch_all(st.pdus)
     new_st = %Session{st | pdus: new_pdu_storage}
 
@@ -532,7 +532,7 @@ defmodule SMPPEX.Session do
   end
 
   @impl TransportSession
-  def code_change(old_vsn, st, extra) do
+  def code_change(old_vsn, %Session{} = st, extra) do
     case st.module.code_change(old_vsn, st.module_state, extra) do
       {:ok, new_module_state} ->
         {:ok, %Session{st | module_state: new_module_state}}
@@ -560,7 +560,7 @@ defmodule SMPPEX.Session do
     {st.module.handle_pdu(pdu, st.module_state), st}
   end
 
-  defp handle_resp_pdu(pdu, st) do
+  defp handle_resp_pdu(pdu, %Session{} = st) do
     sequence_number = Pdu.sequence_number(pdu)
 
     case PduStorage.fetch(st.pdus, sequence_number) do
@@ -579,7 +579,7 @@ defmodule SMPPEX.Session do
     end
   end
 
-  defp update_timers_with_incoming_pdu(pdu, st) do
+  defp update_timers_with_incoming_pdu(pdu, %Session{} = st) do
     new_timers =
       cond do
         Pdu.bind_resp?(pdu) && Pdu.success_resp?(pdu) ->
@@ -599,7 +599,7 @@ defmodule SMPPEX.Session do
     %Session{st | timers: new_timers}
   end
 
-  defp update_timers_with_outgoing_pdu(pdu, send_pdu_result, st) do
+  defp update_timers_with_outgoing_pdu(pdu, send_pdu_result, %Session{} = st) do
     new_timers =
       if send_pdu_result == :ok and Pdu.bind_resp?(pdu) and Pdu.success_resp?(pdu) do
         st.timers
@@ -616,7 +616,7 @@ defmodule SMPPEX.Session do
     {:noreply, [], st}
   end
 
-  defp check_expired_pdus(:custom_pdus, st) do
+  defp check_expired_pdus(:custom_pdus, %Session{} = st) do
     case PduStorage.fetch_expired(st.pdus) do
       {new_pdu_storage, []} ->
         new_st = %Session{st | pdus: new_pdu_storage}
@@ -629,7 +629,7 @@ defmodule SMPPEX.Session do
     end
   end
 
-  defp check_timers(timer_event, st) do
+  defp check_timers(timer_event, %Session{} = st) do
     case SMPPTimers.handle_timer_event(st.timers, timer_event) do
       {:stop, reason} ->
         exit_reason = st.module.handle_timeout(reason, st.module_state)
@@ -655,9 +655,9 @@ defmodule SMPPEX.Session do
   end
 
   defp save_sent_pdus(pdus, st, pdus_to_send \\ [])
-  defp save_sent_pdus([], st, pdus_to_send), do: {st, Enum.reverse(pdus_to_send)}
+  defp save_sent_pdus([], %Session{} = st, pdus_to_send), do: {st, Enum.reverse(pdus_to_send)}
 
-  defp save_sent_pdus([pdu | pdus], st, pdus_to_send) do
+  defp save_sent_pdus([%Pdu{} = pdu | pdus], %Session{} = st, pdus_to_send) do
     if Pdu.resp?(pdu) do
       save_sent_pdus(pdus, st, [pdu | pdus_to_send])
     else
@@ -729,38 +729,38 @@ defmodule SMPPEX.Session do
   defp process_handle_info_reply({reply, st}),
     do: {:stop, {:bad_handle_info_reply, reply}, [], st}
 
-  defp process_reply({{:ok, module_state}, st}) do
+  defp process_reply({{:ok, module_state}, %Session{} = st}) do
     {:ok, [], %Session{st | module_state: module_state}}
   end
 
-  defp process_reply({{:ok, pdus, module_state}, st}) do
-    {new_st, pdus_to_send} = save_sent_pdus(pdus, st)
+  defp process_reply({{:ok, pdus, module_state}, %Session{} = st}) do
+    {%Session{} = new_st, pdus_to_send} = save_sent_pdus(pdus, st)
     {:ok, pdus_to_send, %Session{new_st | module_state: module_state}}
   end
 
-  defp process_reply({{:reply, reply, module_state}, st}) do
+  defp process_reply({{:reply, reply, module_state}, %Session{} = st}) do
     {:reply, reply, [], %Session{st | module_state: module_state}}
   end
 
-  defp process_reply({{:reply, reply, pdus, module_state}, st}) do
-    {new_st, pdus_to_send} = save_sent_pdus(pdus, st)
+  defp process_reply({{:reply, reply, pdus, module_state}, %Session{} = st}) do
+    {%Session{} = new_st, pdus_to_send} = save_sent_pdus(pdus, st)
     {:reply, reply, pdus_to_send, %Session{new_st | module_state: module_state}}
   end
 
-  defp process_reply({{:noreply, module_state}, st}) do
+  defp process_reply({{:noreply, module_state}, %Session{} = st}) do
     {:noreply, [], %Session{st | module_state: module_state}}
   end
 
-  defp process_reply({{:noreply, pdus, module_state}, st}) do
-    {new_st, pdus_to_send} = save_sent_pdus(pdus, st)
+  defp process_reply({{:noreply, pdus, module_state}, %Session{} = st}) do
+    {%Session{} = new_st, pdus_to_send} = save_sent_pdus(pdus, st)
     {:noreply, pdus_to_send, %Session{new_st | module_state: module_state}}
   end
 
-  defp process_reply({{:stop, reason, reply, module_state}, st}) do
+  defp process_reply({{:stop, reason, reply, module_state}, %Session{} = st}) do
     {:stop, reason, reply, [], %Session{st | module_state: module_state}}
   end
 
-  defp process_reply({{:stop, reason, module_state}, st}) do
+  defp process_reply({{:stop, reason, module_state}, %Session{} = st}) do
     {:stop, reason, [], %Session{st | module_state: module_state}}
   end
 end

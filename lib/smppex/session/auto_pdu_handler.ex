@@ -28,8 +28,9 @@ defmodule SMPPEX.Session.AutoPduHandler do
 
   @spec enquire_link(t, non_neg_integer) :: {t, Pdu.t()}
 
-  def enquire_link(handler, sequence_number) do
-    pdu = %Pdu{PduFactory.enquire_link() | sequence_number: sequence_number}
+  def enquire_link(%AutoPduHandler{} = handler, sequence_number) do
+    %Pdu{} = base_pdu = PduFactory.enquire_link()
+    pdu = %Pdu{base_pdu | sequence_number: sequence_number}
     new_pdu_storage = PduStorage.store(handler.pdu_storage, pdu)
     new_my_pdu_refs = MapSet.put(handler.my_pdu_refs, Pdu.ref(pdu))
     {%AutoPduHandler{handler | pdu_storage: new_pdu_storage, my_pdu_refs: new_my_pdu_refs}, pdu}
@@ -37,7 +38,7 @@ defmodule SMPPEX.Session.AutoPduHandler do
 
   @spec handle_send_pdu_result(t, Pdu.t()) :: {t, :proceed | :skip}
 
-  def handle_send_pdu_result(handler, pdu) do
+  def handle_send_pdu_result(%AutoPduHandler{} = handler, pdu) do
     ref = Pdu.ref(pdu)
 
     case MapSet.member?(handler.my_pdu_refs, ref) do
@@ -72,7 +73,7 @@ defmodule SMPPEX.Session.AutoPduHandler do
     :ok
   end
 
-  defp handle_resp(handler, pdu) do
+  defp handle_resp(%AutoPduHandler{} = handler, pdu) do
     case PduStorage.fetch(handler.pdu_storage, Pdu.sequence_number(pdu)) do
       {new_pdu_storage, [_pdu]} ->
         new_handler = %AutoPduHandler{handler | pdu_storage: new_pdu_storage}
@@ -84,7 +85,7 @@ defmodule SMPPEX.Session.AutoPduHandler do
     end
   end
 
-  defp handle_enquire_link(handler, pdu) do
+  defp handle_enquire_link(%AutoPduHandler{} = handler, pdu) do
     resp = PduFactory.enquire_link_resp() |> Pdu.as_reply_to(pdu)
     new_my_pdu_refs = MapSet.put(handler.my_pdu_refs, Pdu.ref(resp))
     {%AutoPduHandler{handler | my_pdu_refs: new_my_pdu_refs}, :skip, [resp]}

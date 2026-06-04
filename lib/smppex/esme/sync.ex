@@ -129,14 +129,14 @@ defmodule SMPPEX.ESME.Sync do
   end
 
   @impl SMPPEX.Session
-  def handle_call(:pdus, _from, st) do
+  def handle_call(:pdus, _from, %St{} = st) do
     pdus = Enum.reverse(st.additional_pdus)
     new_st = %St{st | additional_pdus: []}
     {:reply, pdus, new_st}
   end
 
   @impl SMPPEX.Session
-  def handle_call({:call, :wait_for_pdus, from}, _from, st) do
+  def handle_call({:call, :wait_for_pdus, from}, _from, %St{} = st) do
     new_st =
       case st.additional_pdus do
         [_ | _] ->
@@ -233,21 +233,21 @@ defmodule SMPPEX.ESME.Sync do
     end
   end
 
-  defp has_resp_waiter?(st, pdu), do: Map.has_key?(st.resp_waiters, pdu.ref)
+  defp has_resp_waiter?(%St{} = st, pdu), do: Map.has_key?(st.resp_waiters, pdu.ref)
 
-  defp add_resp_waiter(st, pdu, from) do
+  defp add_resp_waiter(%St{} = st, pdu, from) do
     %St{st | resp_waiters: Map.put(st.resp_waiters, Pdu.ref(pdu), from)}
   end
 
-  defp get_resp_waiter(st, pdu) do
+  defp get_resp_waiter(%St{} = st, pdu) do
     Map.get(st.resp_waiters, Pdu.ref(pdu))
   end
 
-  defp delete_resp_waiter(st, pdu) do
+  defp delete_resp_waiter(%St{} = st, pdu) do
     %St{st | resp_waiters: Map.delete(st.resp_waiters, Pdu.ref(pdu))}
   end
 
-  defp push_to_waiting(pdu_info, st) do
+  defp push_to_waiting(pdu_info, %St{} = st) do
     pdus = [pdu_info | st.additional_pdus]
 
     if st.pdu_waiter do

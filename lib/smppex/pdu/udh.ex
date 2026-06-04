@@ -81,7 +81,7 @@ defmodule SMPPEX.Pdu.UDH do
     case data do
       <<udh_length::integer-unsigned-size(8), rest::binary>> ->
         case rest do
-          <<ies_data::binary-size(udh_length), message::binary>> ->
+          <<ies_data::binary-size(^udh_length), message::binary>> ->
             parse_ies(ies_data, message)
 
           _ ->
@@ -111,7 +111,7 @@ defmodule SMPPEX.Pdu.UDH do
          parsed
        ) do
     case ie_data_and_rest do
-      <<ie_data::binary-size(ie_len), rest::binary>> ->
+      <<ie_data::binary-size(^ie_len), rest::binary>> ->
         parse_ies_data(rest, [{ie_id, ie_data} | parsed])
 
       _ ->
