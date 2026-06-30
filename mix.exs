@@ -33,7 +33,10 @@ defmodule Smppex.Mixfile do
   end
 
   def application do
-    [extra_applications: [:logger]]
+    [
+      extra_applications: [:logger],
+      included_applications: [:klotho]
+    ]
   end
 
   defp deps do
