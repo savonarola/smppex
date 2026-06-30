@@ -46,7 +46,7 @@ defmodule Smppex.Mixfile do
       {:castore, "~> 1.0", only: [:dev, :test]},
       {:ranch, "~> 2.0"},
       {:ex2ms, "~> 1.0"},
-      {:klotho, "~> 0.1"}
+      {:klotho, "~> 0.1", optional: true}
     ]
   end
 
