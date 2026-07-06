@@ -29,7 +29,7 @@ defmodule SMPPEX.Protocol do
 
       command_length <= byte_size(bin) ->
         body_length = command_length - 16
-        <<header::binary-size(12), body::binary-size(^body_length), next_pdus::binary>> = rest
+        <<header::binary-size(12), body::binary-size(body_length), next_pdus::binary>> = rest
         {:ok, parse_pdu(header, body), next_pdus}
 
       true ->

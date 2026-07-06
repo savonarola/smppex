@@ -28,7 +28,7 @@ defmodule SMPPEX.Protocol.Unpack.Helpers do
 
   defp _take_until(bin, char, take_max, current) do
     case bin do
-      <<prefix::binary-size(^current), ^char, rest::binary>> -> {prefix, rest}
+      <<prefix::binary-size(current), ^char, rest::binary>> -> {prefix, rest}
       _ -> _take_until(bin, char, take_max, current + 1)
     end
   end

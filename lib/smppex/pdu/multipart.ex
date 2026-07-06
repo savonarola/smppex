@@ -397,7 +397,7 @@ defmodule SMPPEX.Pdu.Multipart do
   defp split_message_into_parts({ref_num, count, n} = part_info, message, max_len, parts) do
     {part, rest} =
       case message do
-        <<part::binary-size(^max_len), rest::binary>> -> {part, rest}
+        <<part::binary-size(max_len), rest::binary>> -> {part, rest}
         last_part -> {last_part, <<>>}
       end
 

@@ -45,7 +45,7 @@ defmodule SMPPEX.Protocol.OptionalFieldsParser do
     bit_length = size * 8
 
     case value do
-      <<int::big-unsigned-integer-size(^bit_length)>> -> {:ok, int}
+      <<int::big-unsigned-integer-size(bit_length)>> -> {:ok, int}
       _ -> {:error, "Invalid integer"}
     end
   end
@@ -59,7 +59,7 @@ defmodule SMPPEX.Protocol.OptionalFieldsParser do
 
   defp parse_known_tlv(value, {:octet_string, size}) when is_integer(size) do
     case value do
-      <<_::binary-size(^size)>> -> {:ok, value}
+      <<_::binary-size(size)>> -> {:ok, value}
       _ -> {:error, "Invalid octet_string"}
     end
   end

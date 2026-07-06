@@ -20,7 +20,7 @@ defmodule SMPPEX.Protocol.Unpack do
     integer_bit_size = size * 8
 
     case bin do
-      <<int::big-unsigned-integer-size(^integer_bit_size), rest::binary>> -> {:ok, int, rest}
+      <<int::big-unsigned-integer-size(integer_bit_size), rest::binary>> -> {:ok, int, rest}
       _ -> {:error, @unexpected_data_end}
     end
   end
@@ -44,13 +44,13 @@ defmodule SMPPEX.Protocol.Unpack do
       <<@null::size(8), rest::binary>> ->
         {:ok, "", rest}
 
-      <<str::binary-size(^str_length), @null::size(8), rest::binary>> ->
+      <<str::binary-size(str_length), @null::size(8), rest::binary>> ->
         case valid_kind?(str, kind) do
           true -> {:ok, str, rest}
           false -> {:error, @invalid_c_octet_string_format}
         end
 
-      <<_::binary-size(^len), _::binary>> ->
+      <<_::binary-size(len), _::binary>> ->
         {:error, @invalid_fixed_c_octet_string}
 
       _ ->
@@ -81,7 +81,7 @@ defmodule SMPPEX.Protocol.Unpack do
 
   def octet_string(bin, len) when len >= 0 and is_binary(bin) do
     case bin do
-      <<str::binary-size(^len), rest::binary>> -> {:ok, str, rest}
+      <<str::binary-size(len), rest::binary>> -> {:ok, str, rest}
       _ -> {:error, @unexpected_data_end}
     end
   end
@@ -100,7 +100,7 @@ defmodule SMPPEX.Protocol.Unpack do
         value_and_rest::binary
       >>) do
     case value_and_rest do
-      <<value::binary-size(^len), rest::binary>> -> {:ok, {tag, value}, rest}
+      <<value::binary-size(len), rest::binary>> -> {:ok, {tag, value}, rest}
       _ -> {:error, @unexpected_data_end}
     end
   end
