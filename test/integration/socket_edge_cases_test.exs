@@ -1,8 +1,6 @@
 defmodule SMPPEX.Integration.SocketEdgeCasesTest do
   use ExUnit.Case
 
-  require Logger
-
   @moduletag :ssl
 
   alias Support.SSL.MC
