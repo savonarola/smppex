@@ -109,7 +109,7 @@ jobs:
         esac
         git clone --depth 1 --branch "$REBAR3_VERSION" https://github.com/erlang/rebar3.git /tmp/rebar3
         cd /tmp/rebar3
-        ERL_COMPILER_OPTIONS='[nowarn_deprecated_catch,nowarn_match_alias_pats]' ./bootstrap
+        ERL_COMPILER_OPTIONS='[nowarn_deprecated_catch,nowarn_deprecated_function,nowarn_match_alias_pats]' ./bootstrap
         mix local.rebar rebar3 /tmp/rebar3/rebar3 --force
     - name: Restore dependencies cache
       uses: actions/cache@v4
@@ -146,7 +146,7 @@ jobs:
       run: |
         git clone --depth 1 --branch 3.25.1 https://github.com/erlang/rebar3.git /tmp/rebar3
         cd /tmp/rebar3
-        ERL_COMPILER_OPTIONS='[nowarn_deprecated_catch,nowarn_match_alias_pats]' ./bootstrap
+        ERL_COMPILER_OPTIONS='[nowarn_deprecated_catch,nowarn_deprecated_function,nowarn_match_alias_pats]' ./bootstrap
         mix local.rebar rebar3 /tmp/rebar3/rebar3 --force
     - name: Restore dependencies cache
       uses: actions/cache@v4
