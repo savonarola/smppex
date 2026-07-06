@@ -215,12 +215,6 @@ defmodule SMPPEX.ProtocolTest do
   end
 
   test "build: delivery report" do
-    data =
-      <<0x00, 0x00, 0x00, 0x33, 0x00, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x01, 0x02, 0x31, 0x32, 0x33, 0x00, 0x04, 0x05, 0x34, 0x35, 0x36, 0x00, 0x04,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1E, 0x00, 0x03, 0x34, 0x32,
-        0x00, 0x04, 0x27, 0x00, 0x01, 0x02>>
-
     message = ""
     # message_state_delivered
     message_state = 2
@@ -230,7 +224,16 @@ defmodule SMPPEX.ProtocolTest do
 
     pdu = SMPPEX.Pdu.Factory.delivery_report(message_id, source, dest, message, message_state)
 
-    assert {:ok, data} == Protocol.build(pdu)
+    assert {:ok, data} = Protocol.build(pdu)
+    assert {:ok, {:pdu, parsed_pdu}, <<>>} = Protocol.parse(data)
+
+    assert Pdu.command_name(parsed_pdu) == :deliver_sm
+    assert Pdu.source(parsed_pdu) == source
+    assert Pdu.dest(parsed_pdu) == dest
+    assert Pdu.field(parsed_pdu, :esm_class) == 0b00000100
+    assert Pdu.field(parsed_pdu, :short_message) == message
+    assert Pdu.optional_field(parsed_pdu, :receipted_message_id) == message_id
+    assert Pdu.optional_field(parsed_pdu, :message_state) == message_state
   end
 
   test "build failure (invalid optional field name)" do
