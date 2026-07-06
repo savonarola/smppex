@@ -49,6 +49,10 @@ defmodule SMPPEX.SessionTest do
     {:ok, esme: esme, esme_with_opts: esme_with_opts, callbacks: callbacks, server: server}
   end
 
+  defp with_sequence_number(%Pdu{} = pdu, sequence_number) do
+    %Pdu{pdu | sequence_number: sequence_number}
+  end
+
   test "send_pdu", ctx do
     pdu = SMPPEX.Pdu.Factory.bind_transmitter("system_id", "password")
 
@@ -95,10 +99,8 @@ defmodule SMPPEX.SessionTest do
   end
 
   test "reply, reply sequence_number", ctx do
-    pdu = %Pdu{
-      SMPPEX.Pdu.Factory.bind_transmitter("system_id", "password")
-      | sequence_number: 123
-    }
+    pdu =
+      SMPPEX.Pdu.Factory.bind_transmitter("system_id", "password") |> with_sequence_number(123)
 
     {:ok, pdu_data} = SMPPEX.Protocol.build(pdu)
 
@@ -471,10 +473,8 @@ defmodule SMPPEX.SessionTest do
   end
 
   test "handle_pdu with ok", ctx do
-    pdu = %Pdu{
-      SMPPEX.Pdu.Factory.bind_transmitter("system_id", "password")
-      | sequence_number: 123
-    }
+    pdu =
+      SMPPEX.Pdu.Factory.bind_transmitter("system_id", "password") |> with_sequence_number(123)
 
     {:ok, pdu_data} = SMPPEX.Protocol.build(pdu)
 
@@ -494,10 +494,8 @@ defmodule SMPPEX.SessionTest do
   end
 
   test "handle_pdu with ok and pdus", ctx do
-    pdu = %Pdu{
-      SMPPEX.Pdu.Factory.bind_transmitter("system_id", "password")
-      | sequence_number: 123
-    }
+    pdu =
+      SMPPEX.Pdu.Factory.bind_transmitter("system_id", "password") |> with_sequence_number(123)
 
     {:ok, pdu_data} = SMPPEX.Protocol.build(pdu)
 
@@ -528,10 +526,8 @@ defmodule SMPPEX.SessionTest do
   test "handle_pdu with stop", ctx do
     Process.flag(:trap_exit, true)
 
-    pdu = %Pdu{
-      SMPPEX.Pdu.Factory.bind_transmitter("system_id", "password")
-      | sequence_number: 123
-    }
+    pdu =
+      SMPPEX.Pdu.Factory.bind_transmitter("system_id", "password") |> with_sequence_number(123)
 
     {:ok, pdu_data} = SMPPEX.Protocol.build(pdu)
 
@@ -556,10 +552,8 @@ defmodule SMPPEX.SessionTest do
   test "handle_pdu with invalid reply", ctx do
     Process.flag(:trap_exit, true)
 
-    pdu = %Pdu{
-      SMPPEX.Pdu.Factory.bind_transmitter("system_id", "password")
-      | sequence_number: 123
-    }
+    pdu =
+      SMPPEX.Pdu.Factory.bind_transmitter("system_id", "password") |> with_sequence_number(123)
 
     {:ok, pdu_data} = SMPPEX.Protocol.build(pdu)
 
@@ -590,7 +584,7 @@ defmodule SMPPEX.SessionTest do
     Session.send_pdu(esme, pdu)
     assert_receive {:handle_send_pdu_result, _, :ok}
 
-    reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 1}
+    reply_pdu = SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") |> with_sequence_number(1)
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
 
@@ -618,7 +612,7 @@ defmodule SMPPEX.SessionTest do
     Session.send_pdu(esme, pdu)
     assert_receive {:handle_send_pdu_result, _, :ok}
 
-    reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 1}
+    reply_pdu = SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") |> with_sequence_number(1)
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
     assert_receive {:handle_send_pdu_result, _, :ok}
@@ -658,7 +652,7 @@ defmodule SMPPEX.SessionTest do
     Session.send_pdu(esme, pdu)
     assert_receive {:handle_send_pdu_result, _, :ok}
 
-    reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 1}
+    reply_pdu = SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") |> with_sequence_number(1)
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
 
@@ -687,7 +681,7 @@ defmodule SMPPEX.SessionTest do
     Session.send_pdu(esme, pdu)
     assert_receive {:handle_send_pdu_result, _, :ok}
 
-    reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 1}
+    reply_pdu = SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") |> with_sequence_number(1)
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
     assert_receive {:handle_resp, _, _}
@@ -696,7 +690,7 @@ defmodule SMPPEX.SessionTest do
     Session.send_pdu(esme, pdu)
     assert_receive {:handle_send_pdu_result, _, :ok}
 
-    reply_pdu = %Pdu{SMPPEX.Pdu.Factory.submit_sm_resp(0) | sequence_number: 2}
+    reply_pdu = SMPPEX.Pdu.Factory.submit_sm_resp(0) |> with_sequence_number(2)
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
     assert_receive {:handle_resp, _, _}
@@ -725,7 +719,7 @@ defmodule SMPPEX.SessionTest do
     Session.send_pdu(esme, pdu)
     assert_receive {:handle_send_pdu_result, _, :ok}
 
-    reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 2}
+    reply_pdu = SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") |> with_sequence_number(2)
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
 
@@ -753,7 +747,7 @@ defmodule SMPPEX.SessionTest do
     Session.send_pdu(esme, pdu)
     assert_receive {:handle_send_pdu_result, _, :ok}
 
-    reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 1}
+    reply_pdu = SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") |> with_sequence_number(1)
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
 
@@ -776,7 +770,7 @@ defmodule SMPPEX.SessionTest do
 
     Klotho.Mock.warp_by(2050)
 
-    reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 1}
+    reply_pdu = SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") |> with_sequence_number(1)
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
 
@@ -806,7 +800,7 @@ defmodule SMPPEX.SessionTest do
     Session.send_pdu(esme, pdu)
     Klotho.Mock.warp_by(2050)
 
-    reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 1}
+    reply_pdu = SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") |> with_sequence_number(1)
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
 
@@ -836,7 +830,7 @@ defmodule SMPPEX.SessionTest do
 
     Klotho.Mock.warp_by(2050)
 
-    reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 1}
+    reply_pdu = SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") |> with_sequence_number(1)
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
 
@@ -1111,7 +1105,7 @@ defmodule SMPPEX.SessionTest do
 
     assert_receive {:handle_send_pdu_result, _, :ok}
 
-    reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 1}
+    reply_pdu = SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") |> with_sequence_number(1)
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
 
@@ -1149,7 +1143,7 @@ defmodule SMPPEX.SessionTest do
 
     assert_receive {:handle_send_pdu_result, _, :ok}
 
-    reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 1}
+    reply_pdu = SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") |> with_sequence_number(1)
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
 
@@ -1187,14 +1181,14 @@ defmodule SMPPEX.SessionTest do
     Session.send_pdu(esme, pdu)
     assert_receive {:handle_send_pdu_result, _, :ok}
 
-    reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 1}
+    reply_pdu = SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") |> with_sequence_number(1)
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
     assert_receive {:handle_resp, _, _}
 
     Klotho.Mock.warp_by(950)
 
-    action_pdu = %Pdu{SMPPEX.Pdu.Factory.enquire_link() | sequence_number: 1}
+    action_pdu = SMPPEX.Pdu.Factory.enquire_link() |> with_sequence_number(1)
     {:ok, action_pdu_data} = SMPPEX.Protocol.build(action_pdu)
     Server.send(ctx[:server], action_pdu_data)
 
@@ -1219,7 +1213,7 @@ defmodule SMPPEX.SessionTest do
     Session.send_pdu(esme, pdu)
     assert_receive {:handle_send_pdu_result, _, :ok}
 
-    reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 1}
+    reply_pdu = SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") |> with_sequence_number(1)
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
 
@@ -1227,7 +1221,7 @@ defmodule SMPPEX.SessionTest do
 
     Klotho.Mock.warp_by(1050)
 
-    action_pdu = %Pdu{SMPPEX.Pdu.Factory.enquire_link() | sequence_number: 1}
+    action_pdu = SMPPEX.Pdu.Factory.enquire_link() |> with_sequence_number(1)
     {:ok, action_pdu_data} = SMPPEX.Protocol.build(action_pdu)
     Server.send(ctx[:server], action_pdu_data)
 
@@ -1268,7 +1262,7 @@ defmodule SMPPEX.SessionTest do
     Session.send_pdu(esme, pdu)
     assert_receive {:handle_send_pdu_result, _, :ok}
 
-    reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 1}
+    reply_pdu = SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") |> with_sequence_number(1)
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
 
@@ -1317,7 +1311,7 @@ defmodule SMPPEX.SessionTest do
     Session.send_pdu(esme, pdu)
     assert_receive {:handle_send_pdu_result, _, :ok}
 
-    reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 1}
+    reply_pdu = SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") |> with_sequence_number(1)
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
 
@@ -1389,7 +1383,7 @@ defmodule SMPPEX.SessionTest do
 
     assert_receive {:handle_send_pdu_result, _, :ok}
 
-    reply_pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") | sequence_number: 1}
+    reply_pdu = SMPPEX.Pdu.Factory.bind_transmitter_resp(0, "sid") |> with_sequence_number(1)
     {:ok, reply_pdu_data} = SMPPEX.Protocol.build(reply_pdu)
     Server.send(ctx[:server], reply_pdu_data)
 

@@ -69,7 +69,7 @@ defmodule Support.SMPPSession do
     save_callback(st, :handle_send_pdu_result, [pdu, result])
   end
 
-  def handle_call({:set_pdu_handler, pdu_handler}, _from, st) do
+  def handle_call({:set_pdu_handler, pdu_handler}, _from, %SMPPSession{} = st) do
     {:reply, :ok, [], %SMPPSession{st | pdu_handler: pdu_handler}}
   end
 

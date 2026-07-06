@@ -13,9 +13,13 @@ defmodule SMPPEX.PduStorageTest do
     {:ok, storage: PduStorage.new(@id, @ttl, @ttl_threshold)}
   end
 
+  defp with_sequence_number(%Pdu{} = pdu, sequence_number) do
+    %Pdu{pdu | sequence_number: sequence_number}
+  end
+
   test "store", %{storage: storage0} do
-    pdu1 = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter("system_id1", "pass1") | sequence_number: 123}
-    pdu2 = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter("system_id2", "pass2") | sequence_number: 123}
+    pdu1 = SMPPEX.Pdu.Factory.bind_transmitter("system_id1", "pass1") |> with_sequence_number(123)
+    pdu2 = SMPPEX.Pdu.Factory.bind_transmitter("system_id2", "pass2") |> with_sequence_number(123)
 
     storage1 = PduStorage.store(storage0, pdu1)
     storage2 = PduStorage.store(storage1, pdu2)
@@ -26,7 +30,7 @@ defmodule SMPPEX.PduStorageTest do
   end
 
   test "fetch", %{storage: storage0} do
-    pdu = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter("system_id", "pass") | sequence_number: 123}
+    pdu = SMPPEX.Pdu.Factory.bind_transmitter("system_id", "pass") |> with_sequence_number(123)
 
     storage1 = PduStorage.store(storage0, pdu)
 
@@ -36,8 +40,8 @@ defmodule SMPPEX.PduStorageTest do
   end
 
   test "expire", %{storage: storage0} do
-    pdu1 = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter("system_id1", "pass") | sequence_number: 123}
-    pdu2 = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter("system_id2", "pass") | sequence_number: 124}
+    pdu1 = SMPPEX.Pdu.Factory.bind_transmitter("system_id1", "pass") |> with_sequence_number(123)
+    pdu2 = SMPPEX.Pdu.Factory.bind_transmitter("system_id2", "pass") |> with_sequence_number(124)
 
     storage1 = PduStorage.store(storage0, pdu1)
     Klotho.Mock.warp_by(500)
@@ -53,8 +57,8 @@ defmodule SMPPEX.PduStorageTest do
   end
 
   test "stop && lost_pdus", %{storage: storage0} do
-    pdu1 = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter("system_id1", "pass") | sequence_number: 123}
-    pdu2 = %Pdu{SMPPEX.Pdu.Factory.bind_transmitter("system_id2", "pass") | sequence_number: 124}
+    pdu1 = SMPPEX.Pdu.Factory.bind_transmitter("system_id1", "pass") |> with_sequence_number(123)
+    pdu2 = SMPPEX.Pdu.Factory.bind_transmitter("system_id2", "pass") |> with_sequence_number(124)
 
     storage1 = PduStorage.store(storage0, pdu1)
     storage2 = PduStorage.store(storage1, pdu2)
